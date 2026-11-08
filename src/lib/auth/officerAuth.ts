@@ -24,3 +24,4 @@ export function setOfficerAuthenticated(authenticated: boolean): void {
     sessionStorage.removeItem(OFFICER_AUTH_KEY);
   }
 }
+

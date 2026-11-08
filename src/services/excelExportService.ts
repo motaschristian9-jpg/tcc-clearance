@@ -77,3 +77,4 @@ export async function downloadAttendanceWorkbook(params: GenerateWorkbookParams)
   a.click();
   URL.revokeObjectURL(url);
 }
+

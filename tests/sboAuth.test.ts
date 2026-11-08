@@ -13,3 +13,4 @@ describe('SBO Officer Access Protection', () => {
     expect(verifyOfficerPin('tcc-sbo-2026')).toBe(true);
   });
 });
+

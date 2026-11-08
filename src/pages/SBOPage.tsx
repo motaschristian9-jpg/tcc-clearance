@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ScannerView } from '../components/scanner/ScannerView';
 import { CheckCardView } from '../components/officer/CheckCardView';
+import { SignaturePadModal } from '../components/officer/SignaturePadModal';
 import { generateECDSAKeyPair } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
 import { verifyOfficerPin, isOfficerAuthenticated, setOfficerAuthenticated } from '../lib/auth/officerAuth';
+import { downloadAttendanceWorkbook } from '../services/excelExportService';
 import { StoredAttendanceRecord, StoredRosterStudent, StoredScanQueueItem } from '../types/database';
 import {
   ScanLine,
@@ -16,12 +18,16 @@ import {
   LogOut,
   ArrowRight,
   AlertCircle,
+  PenTool,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState<boolean>(false);
+  const [officerSignature, setOfficerSignature] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'scanner' | 'check-card' | 'database'>('scanner');
   const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
@@ -126,6 +132,17 @@ export const SBOPage: React.FC = () => {
     setUnsyncedCount(count);
   };
 
+  const handleExportExcel = async () => {
+    const students = await db.getRosterByDepartment(departmentId);
+    const records = await db.attendance.toArray();
+    await downloadAttendanceWorkbook({
+      eventName: 'CIT Intramurals 2026',
+      departmentId,
+      students,
+      records,
+    });
+  };
+
   const handleSimulateSync = async () => {
     const unsynced = await db.getUnsyncedScans();
     const uuids = unsynced.map((u) => u.client_uuid);
@@ -211,6 +228,16 @@ export const SBOPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSignatureModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 text-xs flex items-center gap-1.5 transition"
+              title="Draw Signature"
+            >
+              <PenTool className="size-3.5" />
+              <span className="hidden sm:inline">My Signature</span>
+            </button>
+
             {unsyncedCount > 0 ? (
               <button
                 type="button"
@@ -333,6 +360,18 @@ export const SBOPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Excel Attendance Download */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="w-full h-11 border border-mono-300 hover:border-mono-900 rounded-xl text-xs font-bold text-mono-900 flex items-center justify-center gap-2 transition active:scale-[0.98] bg-white"
+                >
+                  <FileSpreadsheet className="size-4" />
+                  <span>Download Attendance Sheet (Excel .xlsx)</span>
+                </button>
+              </div>
+
               <div className="p-3 bg-mono-100 rounded-lg text-xs text-mono-700 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-mono-900 flex-shrink-0" />
                 <span>Security keys are safely stored on this device.</span>
@@ -341,6 +380,14 @@ export const SBOPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      <SignaturePadModal
+        isOpen={isSignatureModalOpen}
+        onClose={() => setIsSignatureModalOpen(false)}
+        onSave={(dataUrl) => {
+          setOfficerSignature(dataUrl);
+        }}
+      />
     </div>
   );
 };

@@ -178,3 +178,4 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
     </div>
   );
 };
+

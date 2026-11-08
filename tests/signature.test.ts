@@ -16,3 +16,4 @@ describe('Officer Signature Protocol', () => {
     expect(mockSignature.position).toBe('SBO Auditor');
   });
 });
+

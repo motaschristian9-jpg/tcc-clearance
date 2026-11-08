@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { StudentView } from '../components/student/StudentView';
+import { StudentRegistrationFlow } from '../components/student/StudentRegistrationFlow';
 import {
   generateECDSAKeyPair,
   exportPublicKeyRaw,
@@ -8,21 +9,23 @@ import {
   packTokenToString,
 } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
-import { StoredAttendanceRecord, StoredRosterStudent } from '../types/database';
-import { Wifi, WifiOff, Lock } from 'lucide-react';
+import { StoredAttendanceRecord, StoredProfile } from '../types/database';
+import { Wifi, WifiOff, Lock, UserPlus, UserCheck } from 'lucide-react';
 
 export const StudentPage: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
+  const [currentProfile, setCurrentProfile] = useState<StoredProfile | null>(null);
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+
+  // Student keys and token
   const [studentKeys, setStudentKeys] = useState<{ privateKey: CryptoKey; publicKeyRaw: string } | null>(null);
-  const [studentId] = useState('2023-01042');
-  const [studentName] = useState('Juan Dela Cruz');
-  const [department] = useState('CIT');
-  const [section] = useState('BSIT-3A');
-  const [eventId] = useState('cit-intramurals-2026');
   const [tokenString, setTokenString] = useState<string>('');
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30);
   const [attendanceRecords, setAttendanceRecords] = useState<StoredAttendanceRecord[]>([]);
 
+  const eventId = 'cit-intramurals-2026';
+
+  // Monitor network status
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -37,40 +40,38 @@ export const StudentPage: React.FC = () => {
     };
   }, []);
 
+  // Load existing profile or prompt registration
   useEffect(() => {
-    async function init() {
-      const sKeyPair = await generateECDSAKeyPair(false);
-      const sPubRaw = await exportPublicKeyRaw(sKeyPair.publicKey);
-      setStudentKeys({ privateKey: sKeyPair.privateKey, publicKeyRaw: sPubRaw });
+    async function loadStudent() {
+      const profile = await db.getProfile();
+      if (profile && profile.status === 'approved') {
+        setCurrentProfile(profile);
+        setIsRegistering(false);
 
-      const existing = await db.findStudentBySchoolId(studentId);
-      if (!existing) {
-        const student: StoredRosterStudent = {
-          student_id: `std-${studentId}`,
-          school_id_no: studentId,
-          full_name: studentName,
-          department_id: department,
-          section_id: section,
-          year_level: 3,
-          public_key: sPubRaw,
-          status: 'approved',
-        };
-        await db.roster.put(student);
+        // Load or generate device key
+        const keyPair = await generateECDSAKeyPair(false);
+        const rawPub = await exportPublicKeyRaw(keyPair.publicKey);
+        setStudentKeys({ privateKey: keyPair.privateKey, publicKeyRaw: rawPub });
+
+        // Load attendance
+        const records = await db.getStudentAttendance(profile.id.replace('prof-', 'std-'), eventId);
+        setAttendanceRecords(records);
+      } else if (!profile) {
+        // First-time visitor -> Show registration flow!
+        setIsRegistering(true);
       }
-
-      const records = await db.getStudentAttendance(`std-${studentId}`, eventId);
-      setAttendanceRecords(records);
     }
-    init();
-  }, [studentId, studentName, department, section, eventId]);
+    loadStudent();
+  }, [eventId]);
 
+  // 30s rotating token timer
   useEffect(() => {
-    if (!studentKeys) return;
+    if (!studentKeys || !currentProfile) return;
 
     async function rotateToken() {
-      if (!studentKeys) return;
+      if (!studentKeys || !currentProfile) return;
       const token = await createStudentQRToken({
-        studentId,
+        studentId: currentProfile.school_id_no || '2023-01042',
         eventId,
         privateKey: studentKeys.privateKey,
       });
@@ -92,7 +93,20 @@ export const StudentPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [studentKeys, studentId, eventId]);
+  }, [studentKeys, currentProfile, eventId]);
+
+  const handleRegistrationComplete = async (profile: StoredProfile) => {
+    setCurrentProfile(profile);
+    setIsRegistering(false);
+
+    // Initialize keys for the registered student
+    const keyPair = await generateECDSAKeyPair(false);
+    const rawPub = await exportPublicKeyRaw(keyPair.publicKey);
+    setStudentKeys({ privateKey: keyPair.privateKey, publicKeyRaw: rawPub });
+
+    const records = await db.getStudentAttendance(profile.id.replace('prof-', 'std-'), eventId);
+    setAttendanceRecords(records);
+  };
 
   return (
     <div className="min-h-screen bg-mono-50 text-mono-900 flex flex-col font-sans">
@@ -112,6 +126,25 @@ export const StudentPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Toggle between Card and Registration form for demo/testing */}
+            <button
+              type="button"
+              onClick={() => setIsRegistering(!isRegistering)}
+              className="px-2.5 py-1 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 text-xs flex items-center gap-1.5 transition font-medium"
+            >
+              {isRegistering ? (
+                <>
+                  <UserCheck className="size-3.5" />
+                  <span>View Card</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="size-3.5" />
+                  <span>Register</span>
+                </>
+              )}
+            </button>
+
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-mono-200 text-mono-700 bg-mono-50 text-xs font-medium">
               {isOnline ? (
                 <>
@@ -131,17 +164,27 @@ export const StudentPage: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1">
-        <StudentView
-          studentId={studentId}
-          studentName={studentName}
-          department={department}
-          section={section}
-          eventId={eventId}
-          tokenString={tokenString}
-          secondsRemaining={secondsRemaining}
-          attendanceRecords={attendanceRecords}
-          onExportCard={() => window.print()}
-        />
+        {isRegistering ? (
+          <StudentRegistrationFlow
+            onRegistrationComplete={handleRegistrationComplete}
+          />
+        ) : currentProfile ? (
+          <StudentView
+            studentId={currentProfile.school_id_no || '2023-01042'}
+            studentName={currentProfile.full_name}
+            department={currentProfile.department_id || 'CIT'}
+            section={currentProfile.section_id || 'BSIT-3A'}
+            eventId={eventId}
+            tokenString={tokenString}
+            secondsRemaining={secondsRemaining}
+            attendanceRecords={attendanceRecords}
+            onExportCard={() => window.print()}
+          />
+        ) : (
+          <StudentRegistrationFlow
+            onRegistrationComplete={handleRegistrationComplete}
+          />
+        )}
 
         {/* Discreet Officer Login Link at the bottom */}
         <footer className="mt-12 py-6 border-t border-mono-200 text-center text-xs text-mono-400 flex items-center justify-center gap-1">
