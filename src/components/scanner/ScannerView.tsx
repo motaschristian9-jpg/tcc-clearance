@@ -63,7 +63,8 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [scannedStudent, setScannedStudent] = useState<StoredRosterStudent | null>(null);
   const [scanState, setScanState] = useState<'idle' | 'verifying' | 'accepted' | 'flagged' | 'rejected'>('idle');
   const [flagReason, setFlagReason] = useState<string>('');
-  const [autoCommitTimer, setAutoCommitTimer] = useState<number | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [scanSuccessMsg, setScanSuccessMsg] = useState('');
 
   // Manual Check-in modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -338,11 +339,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         setScanState('flagged');
         setFlagReason('Already signed in for this slot');
         triggerHaptic(false);
-        setTimeout(() => {
-          setScanState('idle');
-          setScannedStudent(null);
-          isProcessingRef.current = false;
-        }, 2200);
         return;
       }
 
@@ -354,56 +350,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         return;
       }
 
-      // Valid: Show green accept with 1.5s auto-commit
+      // Valid: Display student details and wait for officer to confirm
       setScanState('accepted');
       triggerHaptic(true);
-
-      const commitItem = async () => {
-        const serialNo = `${scannerKeyId}-${Date.now().toString().slice(-5)}`;
-        const stamp = await createScannerStamp({
-          serialNo,
-          studentId: student!.student_id,
-          eventId: 'cit-intramurals-2026',
-          slotId: currentSlot,
-          venueId: currentVenue,
-          officerId,
-          scannerKeyId,
-          method: 'qr',
-          locationFlag: 'none',
-          privateKey: scannerKey,
-        });
-
-        const scanQueueItem: StoredScanQueueItem = {
-          client_uuid: crypto.randomUUID(),
-          serial_no: serialNo,
-          student_id: student!.student_id,
-          event_id: 'cit-intramurals-2026',
-          slot_id: currentSlot,
-          venue_id: currentVenue,
-          officer_id: officerId,
-          scanner_key_id: scannerKeyId,
-          method: 'qr',
-          scanned_at: stamp.scanned_at,
-          location_flag: 'none',
-          signature: stamp.signature,
-          status: 'valid',
-          synced: false,
-        };
-
-        await db.enqueueScan(scanQueueItem);
-        onScanCommitted(scanQueueItem);
-        setLatestStamp(stamp);
-
-        setTimeout(() => {
-          setScanState('idle');
-          setScannedStudent(null);
-          setSimulatedTokenInput('');
-          isProcessingRef.current = false;
-        }, 1200);
-      };
-
-      const timer = window.setTimeout(commitItem, 1500);
-      setAutoCommitTimer(timer);
     } catch {
       setScanState('rejected');
       setFlagReason('QR code not recognized');
@@ -416,8 +365,63 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     }
   };
 
-  const handleRejectScan = (reason: string) => {
-    if (autoCommitTimer) clearTimeout(autoCommitTimer);
+  const handleConfirmCheckIn = async () => {
+    if (!scannedStudent) return;
+    setIsCommitting(true);
+
+    try {
+      const serialNo = `${scannerKeyId}-${Date.now().toString().slice(-5)}`;
+      const stamp = await createScannerStamp({
+        serialNo,
+        studentId: scannedStudent.student_id,
+        eventId: 'cit-intramurals-2026',
+        slotId: currentSlot,
+        venueId: currentVenue,
+        officerId,
+        scannerKeyId,
+        method: 'qr',
+        locationFlag: 'none',
+        privateKey: scannerKey,
+      });
+
+      const scanQueueItem: StoredScanQueueItem = {
+        client_uuid: crypto.randomUUID(),
+        serial_no: serialNo,
+        student_id: scannedStudent.student_id,
+        event_id: 'cit-intramurals-2026',
+        slot_id: currentSlot,
+        venue_id: currentVenue,
+        officer_id: officerId,
+        scanner_key_id: scannerKeyId,
+        method: 'qr',
+        scanned_at: stamp.scanned_at,
+        location_flag: 'none',
+        signature: stamp.signature,
+        status: 'valid',
+        synced: false,
+      };
+
+      await db.enqueueScan(scanQueueItem);
+      onScanCommitted(scanQueueItem);
+      setLatestStamp(stamp);
+      triggerHaptic(true);
+
+      setScanSuccessMsg('Attendance Confirmed! Saved on this phone.');
+      setTimeout(() => {
+        setScanSuccessMsg('');
+        setScanState('idle');
+        setScannedStudent(null);
+        setSimulatedTokenInput('');
+        isProcessingRef.current = false;
+        setIsCommitting(false);
+      }, 900);
+    } catch (err) {
+      console.error('Failed to confirm check-in:', err);
+      setIsCommitting(false);
+    }
+  };
+
+  const handleRejectScan = (reason: string = 'Cancelled by officer') => {
     setScanState('rejected');
     setFlagReason(reason);
     triggerHaptic(false);
@@ -425,7 +429,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       setScanState('idle');
       setScannedStudent(null);
       isProcessingRef.current = false;
-    }, 1500);
+    }, 1000);
   };
 
   const handleManualSearch = async (query: string) => {
@@ -728,11 +732,13 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       </div>
 
       {/* 4. Student Photo & Verification Card */}
-      {scanState !== 'idle' && (
+      {scanState !== 'idle' && scannedStudent && (
         <div
-          className={`border-2 rounded-xl p-5 bg-white transition-all ${
-            scanState === 'accepted'
-              ? 'border-mono-900'
+          className={`border-2 rounded-2xl p-5 bg-white shadow-lg transition-all ${
+            scanSuccessMsg
+              ? 'border-mono-950 bg-mono-950 text-white'
+              : scanState === 'accepted'
+              ? 'border-mono-950'
               : scanState === 'flagged'
               ? 'border-mono-400 bg-mono-50'
               : scanState === 'rejected'
@@ -740,81 +746,106 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               : 'border-mono-200'
           }`}
         >
-          {scannedStudent && (
-            <div className="flex gap-4 items-center">
-              {/* Photo at least 40% width */}
-              <div className="w-2/5 aspect-square bg-mono-200 border border-mono-300 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                {scannedStudent.thumb_data_url ? (
-                  <img
-                    src={scannedStudent.thumb_data_url}
-                    alt={scannedStudent.full_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-12 h-12 text-mono-400" />
+          {scanSuccessMsg ? (
+            <div className="py-6 text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-white text-mono-950 mx-auto flex items-center justify-center">
+                <Check className="w-7 h-7 stroke-[3]" />
+              </div>
+              <h3 className="text-lg font-bold text-white">{scanSuccessMsg}</h3>
+              <p className="text-xs text-mono-300">Ready for next student...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Header Status Tag */}
+              <div className="flex items-center justify-between pb-3 border-b border-mono-200">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-mono-500">
+                  Student Verification
+                </span>
+                {scanState === 'accepted' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-mono-900 text-white px-2.5 py-0.5 rounded-full">
+                    <Check className="w-3 h-3 stroke-[3]" />
+                    <span>Identity Match &bull; Tap Confirm</span>
+                  </span>
+                )}
+                {scanState === 'flagged' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full">
+                    <span>{flagReason}</span>
+                  </span>
+                )}
+                {scanState === 'rejected' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-mono-200 text-mono-900 px-2 py-0.5 rounded-full">
+                    <span>{flagReason}</span>
+                  </span>
                 )}
               </div>
 
-              {/* Student Details */}
-              <div className="flex-1 space-y-1">
-                <span className="text-xs text-mono-500 block">
-                  {scannedStudent.school_id_no} &bull; {scannedStudent.department_id}
-                </span>
-                <h3 className="text-xl sm:text-2xl font-black text-mono-900 leading-tight">
-                  {scannedStudent.full_name}
-                </h3>
-                <span className="text-xs font-semibold text-mono-700 block">
-                  {scannedStudent.section_id}
-                </span>
+              {/* Photo & Details Row */}
+              <div className="flex gap-4 items-center">
+                {/* Photo: prominent, high-clarity */}
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-xl border-2 border-mono-900 bg-mono-100 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
+                  {scannedStudent.thumb_data_url ? (
+                    <img
+                      src={scannedStudent.thumb_data_url}
+                      alt={scannedStudent.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-14 h-14 text-mono-400" />
+                  )}
+                </div>
 
-                {scanState === 'accepted' && (
-                  <div className="inline-flex items-center gap-1 text-xs font-bold text-mono-900 mt-2 bg-mono-100 px-2 py-0.5 rounded border border-mono-300">
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>Checked in! (Saving...)</span>
+                {/* Student Info */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="text-xs font-mono font-bold text-mono-600 bg-mono-100 px-2 py-0.5 rounded inline-block">
+                    {scannedStudent.school_id_no}
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black text-mono-950 leading-snug truncate">
+                    {scannedStudent.full_name}
+                  </h3>
+                  <div className="text-xs font-medium text-mono-700">
+                    <strong>{scannedStudent.department_id}</strong> &bull; {scannedStudent.section_id}
                   </div>
+                  <div className="text-[11px] text-mono-500 pt-1">
+                    Slot: <span className="font-semibold text-mono-800">{currentSlotLabel}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                {scanState !== 'rejected' && !flagReason.includes('Already') && (
+                  <button
+                    type="button"
+                    onClick={handleConfirmCheckIn}
+                    disabled={isCommitting}
+                    className="flex-1 min-h-[48px] bg-mono-950 hover:bg-mono-800 text-white text-xs sm:text-sm font-bold rounded-xl py-3 transition active:scale-[0.98] flex items-center justify-center gap-2 shadow"
+                  >
+                    {isCommitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving Check-in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>Confirm Check-in</span>
+                      </>
+                    )}
+                  </button>
                 )}
 
-                {scanState === 'flagged' && (
-                  <div className="text-xs text-mono-800 mt-2 font-medium">
-                    <strong>Check:</strong> {flagReason}
-                  </div>
-                )}
-
-                {scanState === 'rejected' && (
-                  <div className="text-xs text-mono-900 font-bold mt-2">
-                    <strong>Rejected:</strong> {flagReason}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleRejectScan(scanState === 'rejected' ? 'Dismissed' : 'Not this person')}
+                  disabled={isCommitting}
+                  className="flex-1 min-h-[44px] border border-mono-300 hover:border-mono-900 hover:bg-mono-100 text-mono-800 text-xs font-semibold rounded-xl py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+                >
+                  <X className="w-4 h-4" />
+                  <span>{scanState === 'rejected' || flagReason.includes('Already') ? 'Dismiss' : 'Not This Person / Cancel'}</span>
+                </button>
               </div>
             </div>
           )}
-
-          {/* Action buttons */}
-          <div className="mt-4 pt-3 border-t border-mono-200 flex gap-2">
-            <button
-              type="button"
-              onClick={() => handleRejectScan('Not this person')}
-              className="flex-1 min-h-touch border border-mono-900 hover:bg-mono-100 text-mono-900 text-xs font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
-            >
-              <X className="w-4 h-4" />
-              <span>Not This Person</span>
-            </button>
-
-            {scanState === 'flagged' && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (scannedStudent) {
-                    handleCommitManual(scannedStudent);
-                  }
-                }}
-                className="flex-1 min-h-touch bg-mono-900 hover:bg-mono-800 text-white text-xs font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>Confirm Check-in</span>
-              </button>
-            )}
-          </div>
         </div>
       )}
 

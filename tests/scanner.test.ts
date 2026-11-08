@@ -8,3 +8,4 @@ describe('Camera QR Code Scanner Library Verification', () => {
     expect(typeof reader.decodeFromVideoDevice).toBe('function');
   });
 });
+

@@ -24,6 +24,9 @@ import {
   FileSpreadsheet,
   UserCheck,
   Download,
+  CloudUpload,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
@@ -155,11 +158,28 @@ export const SBOPage: React.FC = () => {
     });
   };
 
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
+
   const handleSyncWithServer = async () => {
-    const res = await syncScanQueue();
-    if (res.success) {
-      const count = await db.getUnsyncedScanCount();
-      setUnsyncedCount(count);
+    setIsSyncing(true);
+    setSyncStatusMsg('');
+    try {
+      const res = await syncScanQueue();
+      if (res.success) {
+        const count = await db.getUnsyncedScanCount();
+        setUnsyncedCount(count);
+        setSyncStatusMsg(`Uploaded ${res.syncedCount} scans to Supabase cloud!`);
+        setTimeout(() => setSyncStatusMsg(''), 4000);
+      } else {
+        setSyncStatusMsg(res.error || 'Network connection unavailable. Records remain saved on this device.');
+        setTimeout(() => setSyncStatusMsg(''), 4000);
+      }
+    } catch {
+      setSyncStatusMsg('Sync error. Records are safely stored on this phone.');
+      setTimeout(() => setSyncStatusMsg(''), 4000);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -255,14 +275,17 @@ export const SBOPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSyncWithServer}
-                className="px-3 py-1 bg-mono-950 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition active:scale-[0.98]"
+                disabled={isSyncing}
+                className="px-3 py-1.5 bg-mono-950 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition active:scale-[0.98] shadow-sm"
+                title="Upload offline attendance scans from this phone to Supabase"
               >
-                <span>Send to Server ({unsyncedCount})</span>
+                <CloudUpload className={`size-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
+                <span>{isSyncing ? 'Syncing...' : `Sync to Cloud (${unsyncedCount})`}</span>
               </button>
             ) : (
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-mono-600 font-medium">
-                <CheckCircle className="size-3.5 text-mono-900" />
-                <span>All Scans Saved</span>
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-mono-600 font-medium bg-mono-100 px-2.5 py-1 rounded-lg">
+                <CheckCircle2 className="size-3.5 text-mono-900" />
+                <span>All Scans Synced</span>
               </span>
             )}
 
@@ -362,32 +385,54 @@ export const SBOPage: React.FC = () => {
         {activeTab === 'database' && (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-mono-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-mono-200">
                 <div>
                   <span className="text-xs text-mono-500 uppercase font-semibold">
-                    Device Storage
+                    Offline-First Local Storage
                   </span>
-                  <h3 className="text-base font-bold text-mono-900">Saved Attendance Records</h3>
+                  <h3 className="text-base font-bold text-mono-900">Device Attendance Database</h3>
                 </div>
-                {unsyncedCount > 0 && (
+                {unsyncedCount > 0 ? (
                   <button
                     type="button"
                     onClick={handleSyncWithServer}
-                    className="min-h-touch px-4 py-2 bg-mono-900 text-white rounded-lg text-xs font-bold hover:bg-mono-800 transition active:scale-[0.98]"
+                    disabled={isSyncing}
+                    className="min-h-touch px-4 py-2 bg-mono-900 text-white rounded-lg text-xs font-bold hover:bg-mono-800 transition active:scale-[0.98] flex items-center justify-center gap-2"
                   >
-                    Send to Server Now
+                    <CloudUpload className={`size-4 ${isSyncing ? 'animate-bounce' : ''}`} />
+                    <span>{isSyncing ? 'Uploading to Supabase...' : `Upload ${unsyncedCount} Scans to Cloud`}</span>
                   </button>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 text-xs text-mono-700 bg-mono-100 border border-mono-200 px-3 py-1.5 rounded-lg font-medium">
+                    <CheckCircle2 className="size-4 text-mono-900" />
+                    <span>All scans synced to cloud</span>
+                  </div>
                 )}
               </div>
 
-              <p className="text-xs text-mono-600 leading-relaxed">
-                Scans are saved directly on this phone so the app works even when there is no Wi-Fi or mobile data at the venue. When internet is available, scans automatically sync with the school records.
-              </p>
+              {syncStatusMsg && (
+                <div className="p-3 bg-mono-100 border border-mono-300 rounded-lg text-xs font-medium text-mono-900 flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-mono-900 flex-shrink-0" />
+                  <span>{syncStatusMsg}</span>
+                </div>
+              )}
+
+              <div className="bg-mono-50 border border-mono-200 rounded-xl p-4 text-xs text-mono-700 space-y-2">
+                <h4 className="font-bold text-mono-900">
+                  What is "Sync to Cloud"?
+                </h4>
+                <p className="leading-relaxed">
+                  When you check in students at the gate, scans are <strong>saved directly onto this phone's internal memory</strong> first. This ensures you can keep checking students in even if there is zero Wi-Fi or mobile signal at the venue.
+                </p>
+                <p className="leading-relaxed text-mono-500">
+                  Tapping <strong>Sync to Cloud</strong> uploads these stored offline scans to the central Supabase server so that students' clearance cards update immediately and the Master Clearance Grid reflects live attendance.
+                </p>
+              </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="border border-mono-200 p-4 rounded-xl">
-                  <span className="text-mono-400 block text-xs">Students on Phone</span>
-                  <span className="text-2xl font-bold text-mono-900 mt-1 block">3 Students</span>
+                  <span className="text-mono-400 block text-xs">Offline Records on Phone</span>
+                  <span className="text-2xl font-bold text-mono-900 mt-1 block">Active</span>
                 </div>
                 <div className="border border-mono-200 p-4 rounded-xl">
                   <span className="text-mono-400 block text-xs">Pending Upload</span>
