@@ -13,3 +13,4 @@ describe('Portal Route Configuration', () => {
     expect(routes.student).not.toBe(routes.sbo);
   });
 });
+

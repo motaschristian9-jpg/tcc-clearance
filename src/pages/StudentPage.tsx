@@ -9,7 +9,7 @@ import {
 } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
 import { StoredAttendanceRecord, StoredRosterStudent } from '../types/database';
-import { ArrowLeft, Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, Lock } from 'lucide-react';
 
 export const StudentPage: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
@@ -43,7 +43,6 @@ export const StudentPage: React.FC = () => {
       const sPubRaw = await exportPublicKeyRaw(sKeyPair.publicKey);
       setStudentKeys({ privateKey: sKeyPair.privateKey, publicKeyRaw: sPubRaw });
 
-      // Seed student into roster if not exists
       const existing = await db.findStudentBySchoolId(studentId);
       if (!existing) {
         const student: StoredRosterStudent = {
@@ -101,16 +100,12 @@ export const StudentPage: React.FC = () => {
       <header className="bg-white border-b border-mono-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              to="/"
-              className="p-1.5 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 transition"
-              title="Back to Portals"
-            >
-              <ArrowLeft className="size-4" />
-            </Link>
+            <div className="w-8 h-8 bg-mono-950 text-white font-bold rounded-lg flex items-center justify-center text-xs">
+              TCC
+            </div>
             <div>
               <h1 className="text-sm font-bold text-mono-900 leading-none">
-                Student Portal
+                Activity Card Clearance
               </h1>
               <span className="text-[11px] text-mono-500">Tagoloan Community College</span>
             </div>
@@ -147,6 +142,17 @@ export const StudentPage: React.FC = () => {
           attendanceRecords={attendanceRecords}
           onExportCard={() => window.print()}
         />
+
+        {/* Discreet Officer Login Link at the bottom */}
+        <footer className="mt-12 py-6 border-t border-mono-200 text-center text-xs text-mono-400 flex items-center justify-center gap-1">
+          <Link
+            to="/sbo"
+            className="hover:text-mono-600 transition inline-flex items-center gap-1 text-[11px]"
+          >
+            <Lock className="size-3" />
+            <span>Officer Sign In</span>
+          </Link>
+        </footer>
       </main>
     </div>
   );

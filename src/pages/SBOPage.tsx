@@ -4,17 +4,25 @@ import { ScannerView } from '../components/scanner/ScannerView';
 import { CheckCardView } from '../components/officer/CheckCardView';
 import { generateECDSAKeyPair } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
+import { verifyOfficerPin, isOfficerAuthenticated, setOfficerAuthenticated } from '../lib/auth/officerAuth';
 import { StoredAttendanceRecord, StoredRosterStudent, StoredScanQueueItem } from '../types/database';
 import {
-  ArrowLeft,
   ScanLine,
   FileCheck2,
   FolderDown,
   CheckCircle,
   ShieldCheck,
+  Lock,
+  LogOut,
+  ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [pinError, setPinError] = useState<string>('');
+
   const [activeTab, setActiveTab] = useState<'scanner' | 'check-card' | 'database'>('scanner');
   const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
   const [scannerKey, setScannerKey] = useState<CryptoKey | null>(null);
@@ -23,6 +31,12 @@ export const SBOPage: React.FC = () => {
   const [departmentId] = useState('CIT');
 
   useEffect(() => {
+    setIsAuthenticated(isOfficerAuthenticated());
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     async function init() {
       const scKeyPair = await generateECDSAKeyPair(false);
       setScannerKey(scKeyPair.privateKey);
@@ -69,7 +83,25 @@ export const SBOPage: React.FC = () => {
       setUnsyncedCount(count);
     }
     init();
-  }, []);
+  }, [isAuthenticated]);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (verifyOfficerPin(enteredPin)) {
+      setOfficerAuthenticated(true);
+      setIsAuthenticated(true);
+      setPinError('');
+    } else {
+      setPinError('Invalid Officer Access PIN. Please try again.');
+      setEnteredPin('');
+    }
+  };
+
+  const handleLogout = () => {
+    setOfficerAuthenticated(false);
+    setIsAuthenticated(false);
+    setEnteredPin('');
+  };
 
   const handleScanCommitted = async (scan: StoredScanQueueItem) => {
     const newRecord: StoredAttendanceRecord = {
@@ -90,7 +122,6 @@ export const SBOPage: React.FC = () => {
     };
 
     await db.attendance.put(newRecord);
-
     const count = await db.getUnsyncedScanCount();
     setUnsyncedCount(count);
   };
@@ -102,28 +133,84 @@ export const SBOPage: React.FC = () => {
     setUnsyncedCount(0);
   };
 
+  // If not authenticated, show PIN protection lock screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-mono-50 flex flex-col justify-center text-mono-900 font-sans p-4">
+        <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 py-12">
+          <div className="space-y-2 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-mono-950 text-white shadow-sm">
+              <Lock className="size-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-mono-950">
+              Officer Access
+            </h1>
+            <p className="text-xs text-mono-500 max-w-xs mx-auto">
+              This area is restricted to authorized SBO officers.
+            </p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="bg-white border border-mono-200 rounded-xl p-6 space-y-4 shadow-sm">
+            {pinError && (
+              <div className="p-3 bg-mono-100 border border-mono-300 rounded-lg text-xs flex items-center gap-2 text-mono-900">
+                <AlertCircle className="size-4 flex-shrink-0" />
+                <span>{pinError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="pin-input" className="text-xs font-semibold text-mono-700 block">
+                Enter Officer PIN
+              </label>
+              <input
+                id="pin-input"
+                type="password"
+                inputMode="numeric"
+                placeholder="••••"
+                value={enteredPin}
+                onChange={(e) => setEnteredPin(e.target.value)}
+                autoFocus
+                className="w-full h-11 border border-mono-300 rounded-lg px-3 text-center text-lg tracking-widest font-mono focus:border-mono-900 outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full h-10 bg-mono-950 hover:bg-mono-800 text-white text-xs font-bold rounded-lg transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+            >
+              <span>Unlock Scanner</span>
+              <ArrowRight className="size-3.5" />
+            </button>
+
+            <div className="pt-2 text-center">
+              <Link to="/" className="text-xs text-mono-400 hover:text-mono-700">
+                &larr; Back to Student Card
+              </Link>
+            </div>
+          </form>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-mono-50 text-mono-900 flex flex-col font-sans">
       {/* Top Header */}
       <header className="bg-white border-b border-mono-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              to="/"
-              className="p-1.5 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 transition"
-              title="Back to Portals"
-            >
-              <ArrowLeft className="size-4" />
-            </Link>
+            <div className="w-8 h-8 bg-mono-950 text-white font-bold rounded-lg flex items-center justify-center text-xs">
+              SBO
+            </div>
             <div>
               <h1 className="text-sm font-bold text-mono-900 leading-none">
-                SBO Officer Portal
+                Officer Scanner
               </h1>
               <span className="text-[11px] text-mono-500">Tagoloan Community College</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-2">
             {unsyncedCount > 0 ? (
               <button
                 type="button"
@@ -133,11 +220,20 @@ export const SBOPage: React.FC = () => {
                 <span>Send to Server ({unsyncedCount})</span>
               </button>
             ) : (
-              <span className="inline-flex items-center gap-1 text-xs text-mono-600 font-medium">
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-mono-600 font-medium">
                 <CheckCircle className="size-3.5 text-mono-900" />
                 <span>All Scans Saved</span>
               </span>
             )}
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-600 transition"
+              title="Lock Officer Portal"
+            >
+              <LogOut className="size-4" />
+            </button>
           </div>
         </div>
 
