@@ -103,57 +103,86 @@ export function analyzeCanvasFacePresence(img: ImageDataLike): { valid: boolean;
     return { valid: false, reason: 'Empty camera frame' };
   }
 
+  const getPixel = (x: number, y: number) => {
+    const idx = (y * width + x) * 4;
+    return {
+      r: data[idx],
+      g: data[idx + 1],
+      b: data[idx + 2],
+    };
+  };
+
+  // Human skin chrominance classifier (YCbCr color space + RGB heuristics)
+  const isSkinPixel = (r: number, g: number, b: number) => {
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (y < 35 || y > 245) return false;
+
+    // YCbCr conversion
+    const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+    const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+
+    // Standard human skin cluster in chrominance
+    const inChrominanceCluster = cr >= 133 && cr <= 173 && cb >= 77 && cb <= 127;
+
+    // RGB constraints avoiding yellow wood, gray walls, white/black
+    const rgbHeuristic =
+      r > 60 &&
+      g > 30 &&
+      b > 15 &&
+      r > g &&
+      r > b &&
+      r - g >= 10 &&
+      Math.max(r, g, b) - Math.min(r, g, b) >= 14;
+
+    return inChrominanceCluster && rgbHeuristic;
+  };
+
   let totalLuma = 0;
   let lumaSquaredSum = 0;
-  let skinTonePixels = 0;
+  let centerAnalyzedCount = 0;
+  let centerSkinCount = 0;
+  let edgeCount = 0;
 
-  // We analyze the central 60% of the frame (where the face oval is located)
-  const startX = Math.floor(width * 0.2);
-  const endX = Math.floor(width * 0.8);
+  // We analyze the central oval where the user's face is guided
+  const startX = Math.floor(width * 0.20);
+  const endX = Math.floor(width * 0.80);
   const startY = Math.floor(height * 0.15);
   const endY = Math.floor(height * 0.85);
-  let analyzedPixels = 0;
 
   for (let y = startY; y < endY; y += 2) {
     for (let x = startX; x < endX; x += 2) {
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
+      const { r, g, b } = getPixel(x, y);
 
-      // Standard ITU-R BT.601 luminance
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
       totalLuma += luma;
       lumaSquaredSum += luma * luma;
-      analyzedPixels++;
+      centerAnalyzedCount++;
 
-      // Kovac human skin color detection rule in RGB
-      // R > 95 and G > 40 and B > 20 and max-min > 15 and |R-G| > 15 and R > G and R > B
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      const isSkin =
-        r > 70 &&
-        g > 35 &&
-        b > 15 &&
-        max - min > 12 &&
-        Math.abs(r - g) > 10 &&
-        r > g &&
-        r > b;
+      if (isSkinPixel(r, g, b)) {
+        centerSkinCount++;
+      }
 
-      if (isSkin) {
-        skinTonePixels++;
+      // Local vertical edge check: |L(x, y+2) - L(x, y-2)|
+      if (y > startY + 2 && y < endY - 2) {
+        const pUp = getPixel(x, y - 2);
+        const pDown = getPixel(x, y + 2);
+        const lUp = 0.299 * pUp.r + 0.587 * pUp.g + 0.114 * pUp.b;
+        const lDown = 0.299 * pDown.r + 0.587 * pDown.g + 0.114 * pDown.b;
+        if (Math.abs(lDown - lUp) > 18) {
+          edgeCount++;
+        }
       }
     }
   }
 
-  if (analyzedPixels === 0) {
+  if (centerAnalyzedCount === 0) {
     return { valid: false, reason: 'Camera frame unavailable' };
   }
 
-  const avgLuma = totalLuma / analyzedPixels;
-  const variance = lumaSquaredSum / analyzedPixels - avgLuma * avgLuma;
+  const avgLuma = totalLuma / centerAnalyzedCount;
+  const variance = lumaSquaredSum / centerAnalyzedCount - avgLuma * avgLuma;
   const stdDev = Math.sqrt(Math.max(0, variance));
-  const skinRatio = skinTonePixels / analyzedPixels;
+  const skinRatio = centerSkinCount / centerAnalyzedCount;
 
   // 1. Lighting check
   if (avgLuma < 40) {
@@ -165,14 +194,48 @@ export function analyzeCanvasFacePresence(img: ImageDataLike): { valid: boolean;
   }
 
   // 2. Feature Variance Check (a real face has facial features like eyes, mouth, hair creating contrast)
-  // A blank wall or flat table has very low standard deviation (< 14)
   if (stdDev < 14) {
     return { valid: false, reason: 'No face detected. Please position your face inside the oval.' };
   }
 
-  // 3. Skin-tone presence in central oval
-  if (skinRatio < 0.10) {
-    return { valid: false, reason: 'No face detected. Please position your face directly inside the oval guide.' };
+  // 3. Human skin-tone presence in central oval (require at least 20% skin pixels)
+  if (skinRatio < 0.20) {
+    return { valid: false, reason: 'No face detected. Please look directly into the camera inside the oval guide.' };
+  }
+
+  // 4. Foreground / Subject Isolation Check:
+  // Check the four corners of the photo (outside the face oval).
+  // If the user points the camera at a flat wood desk, uniform wall, or floor,
+  // the corners have the EXACT same skin-like color as the center!
+  let cornerAnalyzed = 0;
+  let cornerSkinCount = 0;
+  const cornerSize = Math.floor(Math.min(width, height) * 0.15);
+
+  const checkCorner = (cx: number, cy: number) => {
+    for (let dy = 0; dy < cornerSize; dy += 2) {
+      for (let dx = 0; dx < cornerSize; dx += 2) {
+        const { r, g, b } = getPixel(cx + dx, cy + dy);
+        cornerAnalyzed++;
+        if (isSkinPixel(r, g, b)) cornerSkinCount++;
+      }
+    }
+  };
+
+  checkCorner(0, 0); // Top-left
+  checkCorner(width - cornerSize, 0); // Top-right
+  checkCorner(0, height - cornerSize); // Bottom-left
+  checkCorner(width - cornerSize, height - cornerSize); // Bottom-right
+
+  const cornerSkinRatio = cornerAnalyzed > 0 ? cornerSkinCount / cornerAnalyzed : 0;
+  // If all 4 corners are as skin-like as the center (> 75%), it's a solid surface (wood desk, floor, wall), NOT a face in front of a background!
+  if (cornerSkinRatio > 0.75 && Math.abs(cornerSkinRatio - skinRatio) < 0.15) {
+    return { valid: false, reason: 'No face detected. Surface appears to be a wall, table, or background object.' };
+  }
+
+  // 5. Edge / Feature detail density check:
+  // Real facial features (eyes, nose, lips) create gradient edges.
+  if (edgeCount < 25) {
+    return { valid: false, reason: 'No facial features detected. Please ensure your eyes and face are clearly visible.' };
   }
 
   return { valid: true };

@@ -9,6 +9,7 @@ import { db } from '../lib/db/dexie';
 import { verifyOfficerPin, isOfficerAuthenticated, setOfficerAuthenticated } from '../lib/auth/officerAuth';
 import { downloadAttendanceWorkbook } from '../services/excelExportService';
 import { syncScanQueue, exportLocalBackupJson } from '../services/syncService';
+import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import { StoredAttendanceRecord, StoredRosterStudent, StoredScanQueueItem } from '../types/database';
 import {
   ScanLine,
@@ -145,6 +146,36 @@ export const SBOPage: React.FC = () => {
     await db.attendance.put(newRecord);
     const count = await db.getUnsyncedScanCount();
     setUnsyncedCount(count);
+
+    // Auto-sync immediately to Supabase cloud if connected so student phone updates instantly!
+    if (isSupabaseConfigured && supabase && navigator.onLine) {
+      try {
+        await supabase.from('attendance_records').upsert(
+          {
+            id: newRecord.id,
+            serial_no: newRecord.serial_no,
+            student_id: newRecord.student_id,
+            event_id: newRecord.event_id,
+            slot_id: newRecord.slot_id,
+            venue_id: newRecord.venue_id,
+            officer_id: newRecord.officer_id,
+            scanner_key_id: newRecord.scanner_key_id,
+            scanned_at: newRecord.scanned_at,
+            method: newRecord.method,
+            location_flag: newRecord.location_flag,
+            status: newRecord.status,
+            signature: newRecord.signature,
+          },
+          { onConflict: 'id' }
+        );
+
+        await db.markScansSynced([scan.client_uuid]);
+        const updatedCount = await db.getUnsyncedScanCount();
+        setUnsyncedCount(updatedCount);
+      } catch (err) {
+        console.warn('Auto cloud sync failed, scan remains safely in local queue:', err);
+      }
+    }
   };
 
   const handleExportExcel = async () => {

@@ -72,8 +72,16 @@ export const StudentView: React.FC<StudentViewProps> = ({
   };
 
   const getSlotRecord = (dayNo: number, slotId: string) => {
-    const fullSlotId = `day${dayNo}-${slotId}`;
-    return attendanceRecords.find((r) => r.slot_id === fullSlotId && r.status === 'valid');
+    const target = `day${dayNo}-${slotId}`.toLowerCase();
+    return attendanceRecords.find((r) => {
+      if (!r || r.status !== 'valid') return false;
+      const s = (r.slot_id || '').toLowerCase();
+      return (
+        s === target ||
+        s === `${dayNo}-${slotId}`.toLowerCase() ||
+        s === slotId.toLowerCase()
+      );
+    });
   };
 
   const totalSigned = attendanceRecords.filter((r) => r.status === 'valid').length;
@@ -199,16 +207,27 @@ export const StudentView: React.FC<StudentViewProps> = ({
                           <span className="text-[11px] text-mono-500">{slot.sub}</span>
                         </div>
 
-                        <div className="my-2 flex flex-col items-center justify-center">
+                        <div className="my-1.5 flex flex-col items-center justify-center">
                           {record ? (
-                            <div className="text-center">
-                              <span className="inline-flex items-center gap-1 text-xs font-bold text-mono-900 border border-mono-900 rounded px-2 py-0.5">
+                            <div className="text-center space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-mono-950 bg-mono-100 border border-mono-900 rounded px-1.5 py-0.5 shadow-sm">
                                 <Check className="w-3 h-3 stroke-[3]" />
-                                <span>Signed</span>
+                                <span>SIGNED</span>
                               </span>
+                              <span className="block font-serif italic font-bold text-[11px] text-mono-900 tracking-tight">
+                                {record.officer_id ? `Officer ${record.officer_id}` : 'SBO Stamped'}
+                              </span>
+                              {record.scanned_at && (
+                                <span className="block text-[9px] font-mono text-mono-500">
+                                  {new Date(record.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
                             </div>
                           ) : (
-                            <div className="w-full border-b border-dashed border-mono-300 my-2"></div>
+                            <div className="w-full flex flex-col items-center justify-center my-3">
+                              <div className="w-3/4 border-b border-dashed border-mono-300"></div>
+                              <span className="text-[10px] text-mono-400 mt-1">Pending</span>
+                            </div>
                           )}
                         </div>
 

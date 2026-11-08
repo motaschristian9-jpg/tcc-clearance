@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { StudentView } from '../components/student/StudentView';
 import { StudentRegistrationFlow } from '../components/student/StudentRegistrationFlow';
@@ -41,6 +41,70 @@ export const StudentPage: React.FC = () => {
     };
   }, []);
 
+  // Load and continuously sync student attendance from local DB and Supabase cloud
+  const syncAndLoadAttendance = useCallback(
+    async (prof: StoredProfile) => {
+      const candidateIds = Array.from(
+        new Set(
+          [
+            prof.id,
+            prof.school_id_no,
+            prof.id.replace('prof-', 'std-'),
+            prof.id.replace('prof-', ''),
+            `std-${prof.school_id_no}`,
+            `prof-${prof.school_id_no}`,
+          ].filter(Boolean) as string[]
+        )
+      );
+
+      // 1. Load from local Dexie database first (instant offline read)
+      const localRecords = await db.attendance
+        .filter((r) => r.event_id === eventId && candidateIds.includes(r.student_id))
+        .toArray();
+
+      if (localRecords.length > 0) {
+        setAttendanceRecords(localRecords);
+      }
+
+      // 2. Fetch latest attendance from Supabase if online
+      if (isSupabaseConfigured && supabase && navigator.onLine) {
+        try {
+          const orConditions = candidateIds.map((id) => `student_id.eq.${id}`).join(',');
+          const { data, error } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('event_id', eventId)
+            .or(orConditions);
+
+          if (!error && data && data.length > 0) {
+            const recordsToCache: StoredAttendanceRecord[] = data.map((d: any) => ({
+              id: d.id,
+              client_uuid: d.id,
+              event_id: d.event_id,
+              slot_id: d.slot_id,
+              student_id: prof.school_id_no || prof.id,
+              venue_id: d.venue_id,
+              officer_id: d.officer_id,
+              scanner_key_id: d.scanner_key_id,
+              scanned_at: d.scanned_at,
+              method: d.method || 'qr',
+              location_flag: d.location_flag || 'none',
+              status: d.status || 'valid',
+              serial_no: d.serial_no || '',
+              signature: d.signature || '',
+            }));
+
+            await db.attendance.bulkPut(recordsToCache);
+            setAttendanceRecords(recordsToCache);
+          }
+        } catch {
+          // Continue silently if offline
+        }
+      }
+    },
+    [eventId]
+  );
+
   // Load existing profile or prompt registration
   useEffect(() => {
     async function loadStudent() {
@@ -55,8 +119,7 @@ export const StudentPage: React.FC = () => {
         setStudentKeys({ privateKey: keyPair.privateKey, publicKeyRaw: rawPub });
 
         // Load attendance
-        const records = await db.getStudentAttendance(profile.id.replace('prof-', 'std-'), eventId);
-        setAttendanceRecords(records);
+        syncAndLoadAttendance(profile);
       } else if (!profile) {
         // First-time visitor -> Show registration flow!
         setIsRegistering(true);
@@ -65,7 +128,19 @@ export const StudentPage: React.FC = () => {
       }
     }
     loadStudent();
-  }, [eventId]);
+  }, [eventId, syncAndLoadAttendance]);
+
+  // Continuously poll attendance records every 3.5s so student gets real-time signature update!
+  useEffect(() => {
+    if (!currentProfile || currentProfile.status !== 'approved') return;
+
+    syncAndLoadAttendance(currentProfile);
+    const interval = setInterval(() => {
+      syncAndLoadAttendance(currentProfile);
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [currentProfile, syncAndLoadAttendance]);
 
   // If student profile is pending, poll Supabase for officer approval
   useEffect(() => {
@@ -136,19 +211,12 @@ export const StudentPage: React.FC = () => {
     const rawPub = await exportPublicKeyRaw(keyPair.publicKey);
     setStudentKeys({ privateKey: keyPair.privateKey, publicKeyRaw: rawPub });
 
-    const records = await db.getStudentAttendance(profile.id.replace('prof-', 'std-'), eventId);
-    setAttendanceRecords(records);
+    syncAndLoadAttendance(profile);
   };
 
   const handleStampClaimed = async () => {
     if (!currentProfile) return;
-    const studentIdKey = currentProfile.school_id_no || currentProfile.id.replace('prof-', 'std-');
-    const records = await db.attendance
-      .where('student_id')
-      .equals(studentIdKey)
-      .filter((r) => r.event_id === eventId)
-      .toArray();
-    setAttendanceRecords(records);
+    syncAndLoadAttendance(currentProfile);
   };
 
   return (
