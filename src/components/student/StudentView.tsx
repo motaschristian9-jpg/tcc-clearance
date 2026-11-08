@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from '../common/QRCode';
 import { StoredAttendanceRecord } from '@/types/database';
-import { RefreshCw, Check, Download, QrCode, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, Check, Download, QrCode, X, AlertCircle, CheckCircle2, User, LogOut } from 'lucide-react';
 import { claimReceiptStamp } from '../../services/receiptClaimService';
 
 interface StudentViewProps {
@@ -9,12 +9,14 @@ interface StudentViewProps {
   studentName: string;
   department: string;
   section: string;
+  email?: string;
   eventId: string;
   tokenString: string;
   secondsRemaining: number;
   attendanceRecords: StoredAttendanceRecord[];
   onExportCard?: () => void;
   onStampClaimed?: () => void;
+  onSwitchAccount?: () => void;
 }
 
 const DAYS = [
@@ -37,11 +39,13 @@ export const StudentView: React.FC<StudentViewProps> = ({
   studentName,
   department,
   section,
+  email,
   tokenString,
   secondsRemaining,
   attendanceRecords,
   onExportCard,
   onStampClaimed,
+  onSwitchAccount,
 }) => {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [receiptInput, setReceiptInput] = useState('');
@@ -116,7 +120,27 @@ export const StudentView: React.FC<StudentViewProps> = ({
           </p>
         </div>
 
-        <div className="pt-4 border-t border-mono-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        {/* Student Session & Email Row */}
+        {email && (
+          <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-mono-100 text-xs">
+            <div className="flex items-center gap-2 truncate text-mono-700">
+              <User className="size-3.5 text-mono-500 flex-shrink-0" />
+              <span className="font-medium truncate">{email}</span>
+            </div>
+            {onSwitchAccount && (
+              <button
+                type="button"
+                onClick={onSwitchAccount}
+                className="text-[11px] font-semibold text-mono-600 hover:text-mono-950 flex items-center gap-1 transition flex-shrink-0 ml-2 py-0.5 px-2 rounded hover:bg-mono-100"
+              >
+                <LogOut className="size-3" />
+                <span>Switch Account</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="border border-mono-200 rounded-lg p-2.5">
             <span className="text-mono-400 block text-[11px]">School ID</span>
             <span className="font-bold text-mono-900">{studentId}</span>

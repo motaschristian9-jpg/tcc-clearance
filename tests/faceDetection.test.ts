@@ -41,5 +41,26 @@ describe('Real-time Face Presence and Luma Analysis', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toContain('face');
   });
+
+  it('rejects continuous non-face surface where corners match center (e.g. wood desk or table)', () => {
+    const width = 200;
+    const height = 200;
+    const woodDeskPixels = new Uint8ClampedArray(width * height * 4);
+    // Fill entire frame with uniform warm tone (like wood table or wall)
+    for (let i = 0; i < woodDeskPixels.length; i += 4) {
+      woodDeskPixels[i] = 160;     // R
+      woodDeskPixels[i + 1] = 110; // G
+      woodDeskPixels[i + 2] = 70;  // B
+      woodDeskPixels[i + 3] = 255; // A
+    }
+
+    const result = analyzeCanvasFacePresence({
+      width,
+      height,
+      data: woodDeskPixels,
+    });
+
+    expect(result.valid).toBe(false);
+  });
 });
 

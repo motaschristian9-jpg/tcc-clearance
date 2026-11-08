@@ -28,6 +28,8 @@ import {
   CloudUpload,
   CheckCircle2,
   Loader2,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
@@ -36,6 +38,7 @@ export const SBOPage: React.FC = () => {
   const [pinError, setPinError] = useState<string>('');
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState<boolean>(false);
   const [officerSignature, setOfficerSignature] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   const [activeTab, setActiveTab] = useState<'scanner' | 'check-card' | 'approvals' | 'database'>('scanner');
   const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
@@ -105,6 +108,50 @@ export const SBOPage: React.FC = () => {
       setPendingApprovalsCount(pendingCount);
     }
     init();
+  }, [isAuthenticated]);
+
+  // Background auto-sync engine: listens for online events and automatically flushes offline scan queue
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const triggerAutoSync = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const pending = await db.getUnsyncedScanCount();
+        if (pending > 0) {
+          const res = await syncScanQueue();
+          if (res.success && res.syncedCount > 0) {
+            const updated = await db.getUnsyncedScanCount();
+            setUnsyncedCount(updated);
+            setSyncStatusMsg(`Auto-uploaded ${res.syncedCount} scan(s) to Supabase cloud!`);
+            setTimeout(() => setSyncStatusMsg(''), 4000);
+          }
+        }
+      } catch {
+        // Continue silently, retaining scans locally
+      }
+    };
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      triggerAutoSync();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check on mount
+    triggerAutoSync();
+
+    // Recurring 4s auto-upload poll whenever internet is active
+    const interval = setInterval(triggerAutoSync, 4000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
   }, [isAuthenticated]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
@@ -302,21 +349,30 @@ export const SBOPage: React.FC = () => {
               <span className="hidden sm:inline">My Signature</span>
             </button>
 
-            {unsyncedCount > 0 ? (
-              <button
-                type="button"
-                onClick={handleSyncWithServer}
-                disabled={isSyncing}
-                className="px-3 py-1.5 bg-mono-950 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition active:scale-[0.98] shadow-sm"
-                title="Upload offline attendance scans from this phone to Supabase"
-              >
-                <CloudUpload className={`size-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
-                <span>{isSyncing ? 'Syncing...' : `Sync to Cloud (${unsyncedCount})`}</span>
-              </button>
+            {/* Auto-Sync Cloud Status Badge */}
+            {isOnline ? (
+              unsyncedCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleSyncWithServer}
+                  disabled={isSyncing}
+                  className="px-2.5 py-1 bg-mono-950 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition active:scale-[0.98] shadow-sm"
+                  title="Offline scans queued. Tap to force upload immediately."
+                >
+                  <CloudUpload className={`size-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
+                  <span>{isSyncing ? 'Uploading...' : `Upload (${unsyncedCount})`}</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-mono-700 font-medium bg-mono-100 border border-mono-200 px-2.5 py-1 rounded-lg">
+                  <span className="size-2 rounded-full bg-mono-950 inline-block animate-pulse"></span>
+                  <span className="hidden sm:inline">Auto-Sync Active</span>
+                  <span className="sm:hidden">Synced</span>
+                </span>
+              )
             ) : (
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-mono-600 font-medium bg-mono-100 px-2.5 py-1 rounded-lg">
-                <CheckCircle2 className="size-3.5 text-mono-900" />
-                <span>All Scans Synced</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-mono-600 font-medium bg-mono-100 border border-mono-200 px-2.5 py-1 rounded-lg">
+                <WifiOff className="size-3 text-mono-400" />
+                <span>Offline ({unsyncedCount} saved)</span>
               </span>
             )}
 
@@ -449,14 +505,15 @@ export const SBOPage: React.FC = () => {
               )}
 
               <div className="bg-mono-50 border border-mono-200 rounded-xl p-4 text-xs text-mono-700 space-y-2">
-                <h4 className="font-bold text-mono-900">
-                  What is "Sync to Cloud"?
+                <h4 className="font-bold text-mono-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="size-4 text-mono-900" />
+                  <span>Automatic Real-Time &amp; Offline Syncing</span>
                 </h4>
                 <p className="leading-relaxed">
-                  When you check in students at the gate, scans are <strong>saved directly onto this phone's internal memory</strong> first. This ensures you can keep checking students in even if there is zero Wi-Fi or mobile signal at the venue.
+                  When you check in students at the gate, scans are <strong>saved directly to this phone's database</strong> first. If internet is active, records are uploaded to Supabase right away.
                 </p>
-                <p className="leading-relaxed text-mono-500">
-                  Tapping <strong>Sync to Cloud</strong> uploads these stored offline scans to the central Supabase server so that students' clearance cards update immediately and the Master Clearance Grid reflects live attendance.
+                <p className="leading-relaxed text-mono-600">
+                  If you are working offline, all scans remain safe on this phone and will <strong>automatically upload to the cloud the moment an internet connection is detected</strong>. When students open their clearance card, it will fetch their official signed records.
                 </p>
               </div>
 

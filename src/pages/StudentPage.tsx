@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { StudentView } from '../components/student/StudentView';
+import { EmailAccessCard } from '../components/student/EmailAccessCard';
 import { StudentRegistrationFlow } from '../components/student/StudentRegistrationFlow';
 import {
   generateECDSAKeyPair,
@@ -11,12 +12,12 @@ import {
 import { db } from '../lib/db/dexie';
 import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import { StoredAttendanceRecord, StoredProfile } from '../types/database';
-import { Wifi, WifiOff, Lock, UserPlus, UserCheck } from 'lucide-react';
+import { Wifi, WifiOff, Lock, Camera, Mail } from 'lucide-react';
 
 export const StudentPage: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [currentProfile, setCurrentProfile] = useState<StoredProfile | null>(null);
-  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [useLegacyFlow, setUseLegacyFlow] = useState<boolean>(false);
 
   // Student keys and token
   const [studentKeys, setStudentKeys] = useState<{ privateKey: CryptoKey; publicKeyRaw: string } | null>(null);
@@ -105,13 +106,46 @@ export const StudentPage: React.FC = () => {
     [eventId]
   );
 
-  // Load existing profile or prompt registration
+  // Load existing profile or prompt email entry
   useEffect(() => {
     async function loadStudent() {
-      const profile = await db.getProfile();
+      let profile = await db.getProfile();
+      const savedEmail = localStorage.getItem('tcc_active_student_email');
+
+      // If no local profile but savedEmail exists, try to load from Supabase
+      if ((!profile || profile.status !== 'approved') && savedEmail && isSupabaseConfigured && supabase && navigator.onLine) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('email', savedEmail.toLowerCase().trim())
+            .limit(1)
+            .maybeSingle();
+
+          if (data) {
+            profile = {
+              id: data.id,
+              email: data.email || savedEmail,
+              role: 'student',
+              full_name: data.full_name,
+              school_id_no: data.school_id_no,
+              department_id: data.department_id || 'CIT',
+              section_id: data.section_id || 'BSIT-3A',
+              year_level: data.year_level || 3,
+              photo_path: data.photo_url,
+              thumb_path: data.thumb_data_url,
+              photo_status: 'accepted',
+              status: 'approved',
+            };
+            await db.saveProfile(profile);
+          }
+        } catch {
+          // Ignore offline errors
+        }
+      }
+
       if (profile && profile.status === 'approved') {
         setCurrentProfile(profile);
-        setIsRegistering(false);
 
         // Load or generate device key
         const keyPair = await generateECDSAKeyPair(false);
@@ -120,11 +154,8 @@ export const StudentPage: React.FC = () => {
 
         // Load attendance
         syncAndLoadAttendance(profile);
-      } else if (!profile) {
-        // First-time visitor -> Show registration flow!
-        setIsRegistering(true);
-      } else if (profile.status === 'pending') {
-        setCurrentProfile(profile);
+      } else {
+        setCurrentProfile(null);
       }
     }
     loadStudent();
@@ -141,35 +172,6 @@ export const StudentPage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [currentProfile, syncAndLoadAttendance]);
-
-  // If student profile is pending, poll Supabase for officer approval
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !currentProfile || currentProfile.status === 'approved') return;
-
-    const interval = setInterval(async () => {
-      if (!supabase) return;
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('status')
-          .eq('school_id_no', currentProfile.school_id_no)
-          .single();
-
-        if (data?.status === 'approved') {
-          await db.profile.update(currentProfile.id, { status: 'approved' });
-          const updated = await db.getProfile();
-          if (updated) {
-            setCurrentProfile(updated);
-            setIsRegistering(false);
-          }
-        }
-      } catch {
-        // Continue silently if offline
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [currentProfile]);
 
   // 30s rotating token timer
   useEffect(() => {
@@ -202,9 +204,9 @@ export const StudentPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [studentKeys, currentProfile, eventId]);
 
-  const handleRegistrationComplete = async (profile: StoredProfile) => {
+  const handleProfileReady = async (profile: StoredProfile) => {
     setCurrentProfile(profile);
-    setIsRegistering(false);
+    setUseLegacyFlow(false);
 
     // Initialize keys for the registered student
     const keyPair = await generateECDSAKeyPair(false);
@@ -212,6 +214,16 @@ export const StudentPage: React.FC = () => {
     setStudentKeys({ privateKey: keyPair.privateKey, publicKeyRaw: rawPub });
 
     syncAndLoadAttendance(profile);
+  };
+
+  const handleSwitchAccount = async () => {
+    localStorage.removeItem('tcc_active_student_email');
+    await db.profile.clear();
+    setCurrentProfile(null);
+    setStudentKeys(null);
+    setTokenString('');
+    setAttendanceRecords([]);
+    setUseLegacyFlow(false);
   };
 
   const handleStampClaimed = async () => {
@@ -225,9 +237,9 @@ export const StudentPage: React.FC = () => {
       <header className="bg-white border-b border-mono-200 sticky top-0 z-40 no-print">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-mono-950 text-white font-bold rounded-lg flex items-center justify-center text-xs">
+            <Link to="/" className="w-8 h-8 bg-mono-950 text-white font-bold rounded-lg flex items-center justify-center text-xs hover:bg-mono-800 transition">
               TCC
-            </div>
+            </Link>
             <div>
               <h1 className="text-sm font-bold text-mono-900 leading-none">
                 Activity Card Clearance
@@ -237,24 +249,35 @@ export const StudentPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Toggle between Card and Registration form for demo/testing */}
-            <button
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)}
-              className="px-2.5 py-1 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 text-xs flex items-center gap-1.5 transition font-medium"
-            >
-              {isRegistering ? (
-                <>
-                  <UserCheck className="size-3.5" />
-                  <span>View Card</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="size-3.5" />
-                  <span>Register</span>
-                </>
-              )}
-            </button>
+            {currentProfile ? (
+              <button
+                type="button"
+                onClick={handleSwitchAccount}
+                className="px-2.5 py-1 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 text-xs flex items-center gap-1.5 transition font-medium"
+                title="Switch student account"
+              >
+                <Mail className="size-3.5" />
+                <span>Switch Email</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setUseLegacyFlow(!useLegacyFlow)}
+                className="px-2.5 py-1 rounded-lg border border-mono-200 hover:bg-mono-100 text-mono-700 text-xs flex items-center gap-1.5 transition font-medium"
+              >
+                {useLegacyFlow ? (
+                  <>
+                    <Mail className="size-3.5" />
+                    <span>Email Sign In</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="size-3.5" />
+                    <span>Photo Setup</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-mono-200 text-mono-700 bg-mono-50 text-xs font-medium">
               {isOnline ? (
@@ -265,7 +288,7 @@ export const StudentPage: React.FC = () => {
               ) : (
                 <>
                   <WifiOff className="size-3 text-mono-400" />
-                  <span>Working Offline</span>
+                  <span>Offline</span>
                 </>
               )}
             </span>
@@ -275,26 +298,29 @@ export const StudentPage: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1">
-        {isRegistering ? (
-          <StudentRegistrationFlow
-            onRegistrationComplete={handleRegistrationComplete}
-          />
-        ) : currentProfile ? (
+        {currentProfile ? (
           <StudentView
             studentId={currentProfile.school_id_no || '2023-01042'}
             studentName={currentProfile.full_name}
             department={currentProfile.department_id || 'CIT'}
             section={currentProfile.section_id || 'BSIT-3A'}
+            email={currentProfile.email}
             eventId={eventId}
             tokenString={tokenString}
             secondsRemaining={secondsRemaining}
             attendanceRecords={attendanceRecords}
             onExportCard={() => window.print()}
             onStampClaimed={handleStampClaimed}
+            onSwitchAccount={handleSwitchAccount}
+          />
+        ) : useLegacyFlow ? (
+          <StudentRegistrationFlow
+            onRegistrationComplete={handleProfileReady}
           />
         ) : (
-          <StudentRegistrationFlow
-            onRegistrationComplete={handleRegistrationComplete}
+          <EmailAccessCard
+            onAccessGranted={handleProfileReady}
+            initialEmail={localStorage.getItem('tcc_active_student_email') || ''}
           />
         )}
 

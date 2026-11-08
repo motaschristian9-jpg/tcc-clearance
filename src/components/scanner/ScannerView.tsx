@@ -43,8 +43,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 }) => {
   const [currentVenue] = useState('Gymnasium Gate');
   const [currentSlot, setCurrentSlot] = useState('day1-morning-in');
-  const [currentSlotLabel, setCurrentSlotLabel] = useState('Day 1 Morning In');
+  const [currentSlotLabel, setCurrentSlotLabel] = useState('Day 1 Morning In (Morning Arrival)');
   const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
+  const [selectedDayTab, setSelectedDayTab] = useState<number>(1);
 
   // Camera state & refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -297,19 +298,19 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           const { data } = await supabase
             .from('profiles')
             .select('*')
-            .or(`school_id_no.eq.${studentId},id.eq.${studentId}`)
+            .or(`school_id_no.eq.${studentId},id.eq.${studentId},email.eq.${studentId}`)
             .limit(1)
             .maybeSingle();
 
           if (data) {
             student = {
-              student_id: data.id,
+              student_id: data.school_id_no || data.id,
               school_id_no: data.school_id_no || studentId,
               full_name: data.full_name,
               department_id: data.department_id || departmentId,
               section_id: data.section_id || 'N/A',
               public_key: 'online-key',
-              thumb_data_url: data.photo_path || data.thumb_path,
+              thumb_data_url: data.photo_path || data.photo_url || data.thumb_path || data.thumb_data_url,
               status: data.status || 'approved',
             };
           }
@@ -519,32 +520,75 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         </div>
       </button>
 
-      {/* Slot Picker Dropdown */}
+      {/* Slot Picker Dropdown (5 Days x 4 Slots = 20 Slots) */}
       {isSlotPickerOpen && (
-        <div className="bg-white border border-mono-200 rounded-xl p-3 space-y-2 text-xs">
-          <div className="text-mono-400 uppercase text-[11px] font-semibold pb-1 border-b border-mono-200">
-            Select Slot to Scan
-          </div>
-          {[
-            { id: 'day1-morning-in', label: 'Day 1 Morning In (Morning Arrival)' },
-            { id: 'day1-morning-out', label: 'Day 1 Morning Out (Lunch Exit)' },
-            { id: 'day1-afternoon-in', label: 'Day 1 Afternoon In (Afternoon Arrival)' },
-            { id: 'day1-afternoon-out', label: 'Day 1 Afternoon Out (Dismissal)' },
-          ].map((slot) => (
+        <div className="bg-white border border-mono-200 rounded-xl p-3.5 space-y-3 text-xs shadow-sm">
+          <div className="flex items-center justify-between pb-2 border-b border-mono-200">
+            <span className="text-mono-500 uppercase text-[11px] font-bold tracking-wider">
+              Select Attendance Slot (20 Total Slots)
+            </span>
             <button
-              key={slot.id}
-              onClick={() => {
-                setCurrentSlot(slot.id);
-                setCurrentSlotLabel(slot.label);
-                setIsSlotPickerOpen(false);
-              }}
-              className={`w-full text-left p-3 rounded-lg transition ${
-                currentSlot === slot.id ? 'bg-mono-900 text-white font-bold' : 'hover:bg-mono-100 text-mono-800'
-              }`}
+              type="button"
+              onClick={() => setIsSlotPickerOpen(false)}
+              className="text-mono-400 hover:text-mono-900 text-xs font-semibold"
             >
-              {slot.label}
+              Close
             </button>
-          ))}
+          </div>
+
+          {/* Day Selector Tabs */}
+          <div className="grid grid-cols-5 gap-1.5 p-1 bg-mono-100 rounded-lg">
+            {[1, 2, 3, 4, 5].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelectedDayTab(d)}
+                className={`py-1.5 text-xs font-bold rounded-md transition ${
+                  selectedDayTab === d
+                    ? 'bg-white text-mono-950 shadow-sm border border-mono-200'
+                    : 'text-mono-600 hover:text-mono-900'
+                }`}
+              >
+                Day {d}
+              </button>
+            ))}
+          </div>
+
+          {/* Slots for Selected Day */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+            {[
+              { type: 'morning-in', name: 'Morning In', sub: 'Arrival' },
+              { type: 'morning-out', name: 'Morning Out', sub: 'Lunch Exit' },
+              { type: 'afternoon-in', name: 'Afternoon In', sub: 'Afternoon Arrival' },
+              { type: 'afternoon-out', name: 'Afternoon Out', sub: 'Dismissal' },
+            ].map((slot) => {
+              const fullSlotId = `day${selectedDayTab}-${slot.type}`;
+              const fullLabel = `Day ${selectedDayTab} ${slot.name} (${slot.sub})`;
+              const isSelected = currentSlot === fullSlotId;
+
+              return (
+                <button
+                  key={fullSlotId}
+                  type="button"
+                  onClick={() => {
+                    setCurrentSlot(fullSlotId);
+                    setCurrentSlotLabel(fullLabel);
+                    setIsSlotPickerOpen(false);
+                  }}
+                  className={`p-2.5 rounded-lg border text-left flex flex-col transition ${
+                    isSelected
+                      ? 'bg-mono-950 text-white border-mono-950 font-bold'
+                      : 'bg-white border-mono-200 hover:bg-mono-50 text-mono-900'
+                  }`}
+                >
+                  <span className="font-bold text-xs">{slot.name}</span>
+                  <span className={`text-[10px] ${isSelected ? 'text-mono-300' : 'text-mono-500'}`}>
+                    Day {selectedDayTab} &bull; {slot.sub}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

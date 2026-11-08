@@ -35,5 +35,31 @@ describe('Student Registration Storage Flow', () => {
     expect(saved?.school_id_no).toBe('2023-01999');
     expect(saved?.status).toBe('pending');
   });
+
+  it('supports frictionless email-based instant student profile creation', async () => {
+    const studentEmail = '2023-01042@tagoloan.edu.ph';
+    const emailPrefix = studentEmail.split('@')[0];
+
+    const approvedProfile: StoredProfile = {
+      id: `prof-${emailPrefix}`,
+      email: studentEmail,
+      role: 'student',
+      full_name: 'Juan Dela Cruz',
+      school_id_no: emailPrefix,
+      department_id: 'CIT',
+      section_id: 'BSIT-3A',
+      year_level: 3,
+      status: 'approved',
+      photo_status: 'accepted',
+    };
+
+    await db.saveProfile(approvedProfile);
+
+    const active = await db.getProfile();
+    expect(active).toBeDefined();
+    expect(active?.email).toBe(studentEmail);
+    expect(active?.status).toBe('approved');
+    expect(active?.school_id_no).toBe('2023-01042');
+  });
 });
 
