@@ -36,3 +36,4 @@ describe('Student Registration Storage Flow', () => {
     expect(saved?.status).toBe('pending');
   });
 });
+

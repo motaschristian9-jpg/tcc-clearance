@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ScannerView } from '../components/scanner/ScannerView';
 import { CheckCardView } from '../components/officer/CheckCardView';
+import { PendingApprovalsView } from '../components/officer/PendingApprovalsView';
 import { SignaturePadModal } from '../components/officer/SignaturePadModal';
 import { generateECDSAKeyPair } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
@@ -20,6 +21,7 @@ import {
   AlertCircle,
   PenTool,
   FileSpreadsheet,
+  UserCheck,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
@@ -29,8 +31,9 @@ export const SBOPage: React.FC = () => {
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState<boolean>(false);
   const [officerSignature, setOfficerSignature] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'scanner' | 'check-card' | 'database'>('scanner');
+  const [activeTab, setActiveTab] = useState<'scanner' | 'check-card' | 'approvals' | 'database'>('scanner');
   const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
   const [scannerKey, setScannerKey] = useState<CryptoKey | null>(null);
   const [scannerKeyId] = useState('SCANNER-CIT-01');
   const [officerId] = useState('officer-sbo-auditor-1');
@@ -87,6 +90,13 @@ export const SBOPage: React.FC = () => {
 
       const count = await db.getUnsyncedScanCount();
       setUnsyncedCount(count);
+
+      const pendingCount = await db.roster
+        .where('department_id')
+        .equals(departmentId)
+        .filter((s) => s.status === 'pending')
+        .count();
+      setPendingApprovalsCount(pendingCount);
     }
     init();
   }, [isAuthenticated]);
@@ -281,6 +291,24 @@ export const SBOPage: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => setActiveTab('approvals')}
+            className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
+              activeTab === 'approvals'
+                ? 'border-mono-900 text-mono-900'
+                : 'border-transparent text-mono-400 hover:text-mono-700'
+            }`}
+          >
+            <UserCheck className="size-3.5" />
+            <span>Approvals</span>
+            {pendingApprovalsCount > 0 && (
+              <span className="size-4 rounded-full bg-mono-900 text-white text-[10px] font-bold flex items-center justify-center">
+                {pendingApprovalsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('check-card')}
             className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
               activeTab === 'check-card'
@@ -318,6 +346,10 @@ export const SBOPage: React.FC = () => {
             onScanCommitted={handleScanCommitted}
             unsyncedCount={unsyncedCount}
           />
+        )}
+
+        {activeTab === 'approvals' && (
+          <PendingApprovalsView departmentId={departmentId} />
         )}
 
         {activeTab === 'check-card' && (

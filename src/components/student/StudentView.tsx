@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QRCodeSVG } from '../common/QRCode';
 import { StoredAttendanceRecord } from '@/types/database';
-import { RefreshCw, Check, Download } from 'lucide-react';
+import { RefreshCw, Check, Download, QrCode, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { claimReceiptStamp } from '../../services/receiptClaimService';
 
 interface StudentViewProps {
   studentId: string;
@@ -13,6 +14,7 @@ interface StudentViewProps {
   secondsRemaining: number;
   attendanceRecords: StoredAttendanceRecord[];
   onExportCard?: () => void;
+  onStampClaimed?: () => void;
 }
 
 const DAYS = [
@@ -39,7 +41,36 @@ export const StudentView: React.FC<StudentViewProps> = ({
   secondsRemaining,
   attendanceRecords,
   onExportCard,
+  onStampClaimed,
 }) => {
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [receiptInput, setReceiptInput] = useState('');
+  const [claimError, setClaimError] = useState('');
+  const [claimSuccess, setClaimSuccess] = useState('');
+
+  const handleClaimReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setClaimError('');
+    setClaimSuccess('');
+
+    const result = await claimReceiptStamp({
+      receiptString: receiptInput,
+      currentStudentId: studentId,
+    });
+
+    if (result.success) {
+      setClaimSuccess(`Stamp recorded successfully for ${result.slotId}!`);
+      onStampClaimed?.();
+      setTimeout(() => {
+        setIsClaimModalOpen(false);
+        setReceiptInput('');
+        setClaimSuccess('');
+      }, 1500);
+    } else {
+      setClaimError(result.error || 'Failed to claim stamp.');
+    }
+  };
+
   const getSlotRecord = (dayNo: number, slotId: string) => {
     const fullSlotId = `day${dayNo}-${slotId}`;
     return attendanceRecords.find((r) => r.slot_id === fullSlotId && r.status === 'valid');
@@ -50,7 +81,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
   return (
     <div className="space-y-6">
       {/* 1. Student QR Section */}
-      <div className="bg-white border border-mono-200 rounded-xl p-6">
+      <div className="bg-white border border-mono-200 rounded-xl p-6 no-print">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-mono-200 gap-2">
           <div>
             <span className="text-xs text-mono-500 uppercase font-semibold">Event Check-in</span>
@@ -98,26 +129,36 @@ export const StudentView: React.FC<StudentViewProps> = ({
       </div>
 
       {/* 2. Official Activity Card */}
-      <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-6 print:border-0 print:p-0">
+        <div className="flex items-center justify-between no-print">
           <div>
             <span className="text-xs text-mono-500 uppercase font-semibold">Clearance Card</span>
             <h2 className="text-lg font-bold text-mono-900">CIT Intramurals 2026</h2>
           </div>
-          {onExportCard && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onExportCard}
-              className="min-h-touch px-4 py-2 bg-mono-900 hover:bg-mono-800 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition active:scale-[0.98]"
+              onClick={() => setIsClaimModalOpen(true)}
+              className="min-h-touch px-3 py-2 border border-mono-300 hover:border-mono-900 text-mono-900 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition active:scale-[0.98] bg-white"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Print or Save</span>
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Claim Stamp</span>
             </button>
-          )}
+            {onExportCard && (
+              <button
+                type="button"
+                onClick={onExportCard}
+                className="min-h-touch px-4 py-2 bg-mono-900 hover:bg-mono-800 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition active:scale-[0.98]"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Print or Save</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Card Canvas */}
-        <div className="border-2 border-mono-900 p-5 sm:p-6 rounded-lg bg-white space-y-6">
+        <div className="border-2 border-mono-900 p-5 sm:p-6 rounded-lg bg-white space-y-6 clearance-card-print">
           <div className="text-center space-y-1 pb-4 border-b border-mono-200">
             <div className="text-xs uppercase font-bold text-mono-600 tracking-wider">
               Tagoloan Community College
@@ -196,6 +237,66 @@ export const StudentView: React.FC<StudentViewProps> = ({
           </div>
         </div>
       </div>
+      {/* Claim Modal */}
+      {isClaimModalOpen && (
+        <div className="fixed inset-0 bg-mono-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
+          <div className="bg-white border border-mono-200 max-w-sm w-full rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-mono-200">
+              <div>
+                <span className="text-[10px] text-mono-400 uppercase font-semibold block">Offline Clearance</span>
+                <h3 className="font-bold text-mono-900 text-base">Claim Attendance Stamp</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClaimModalOpen(false);
+                  setClaimError('');
+                  setClaimSuccess('');
+                  setReceiptInput('');
+                }}
+                className="p-1 text-mono-400 hover:text-mono-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-mono-600">
+              If you checked in offline, paste the stamp receipt code from the officer's screen below to stamp your activity card right now.
+            </p>
+
+            {claimError && (
+              <div className="p-3 bg-mono-100 border border-mono-300 rounded-lg text-xs flex items-center gap-2 text-mono-900">
+                <AlertCircle className="size-4 flex-shrink-0" />
+                <span>{claimError}</span>
+              </div>
+            )}
+
+            {claimSuccess && (
+              <div className="p-3 bg-mono-100 border border-mono-900 rounded-lg text-xs flex items-center gap-2 text-mono-900 font-bold">
+                <CheckCircle2 className="size-4 flex-shrink-0" />
+                <span>{claimSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleClaimReceipt} className="space-y-3">
+              <textarea
+                rows={3}
+                placeholder="Paste stamp receipt code here..."
+                value={receiptInput}
+                onChange={(e) => setReceiptInput(e.target.value)}
+                className="w-full border border-mono-300 rounded-lg p-3 text-xs font-mono focus:border-mono-900 outline-none resize-none"
+              />
+
+              <button
+                type="submit"
+                className="w-full h-10 bg-mono-950 hover:bg-mono-800 text-white rounded-lg text-xs font-bold transition active:scale-[0.98]"
+              >
+                Stamp My Card
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

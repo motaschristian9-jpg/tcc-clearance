@@ -108,10 +108,21 @@ export const StudentPage: React.FC = () => {
     setAttendanceRecords(records);
   };
 
+  const handleStampClaimed = async () => {
+    if (!currentProfile) return;
+    const studentIdKey = currentProfile.school_id_no || currentProfile.id.replace('prof-', 'std-');
+    const records = await db.attendance
+      .where('student_id')
+      .equals(studentIdKey)
+      .filter((r) => r.event_id === eventId)
+      .toArray();
+    setAttendanceRecords(records);
+  };
+
   return (
     <div className="min-h-screen bg-mono-50 text-mono-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="bg-white border-b border-mono-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-mono-200 sticky top-0 z-40 no-print">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-mono-950 text-white font-bold rounded-lg flex items-center justify-center text-xs">
@@ -179,6 +190,7 @@ export const StudentPage: React.FC = () => {
             secondsRemaining={secondsRemaining}
             attendanceRecords={attendanceRecords}
             onExportCard={() => window.print()}
+            onStampClaimed={handleStampClaimed}
           />
         ) : (
           <StudentRegistrationFlow
@@ -187,7 +199,7 @@ export const StudentPage: React.FC = () => {
         )}
 
         {/* Discreet Officer Login Link at the bottom */}
-        <footer className="mt-12 py-6 border-t border-mono-200 text-center text-xs text-mono-400 flex items-center justify-center gap-1">
+        <footer className="mt-12 py-6 border-t border-mono-200 text-center text-xs text-mono-400 flex items-center justify-center gap-1 no-print">
           <Link
             to="/sbo"
             className="hover:text-mono-600 transition inline-flex items-center gap-1 text-[11px]"

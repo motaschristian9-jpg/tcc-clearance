@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Camera, RefreshCw, Check, AlertCircle } from 'lucide-react';
-import { compressImageToDimensions } from '@/lib/camera/faceDetector';
+import { Camera, RefreshCw, Check, AlertCircle, AlertTriangle } from 'lucide-react';
+import { compressImageToDimensions, verifyFaceInCapturedCanvas } from '@/lib/camera/faceDetector';
 
 interface LivePhotoCaptureProps {
   onPhotoCaptured: (photo480Url: string, thumb160Url: string) => void;
@@ -12,15 +12,17 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string>('');
+  const [faceCheckError, setFaceCheckError] = useState<string>('');
   const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const startCamera = useCallback(async () => {
     try {
       setCameraError('');
+      setFaceCheckError('');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user', // Front camera
+          facingMode: 'user', // Front camera only
           width: { ideal: 640 },
           height: { ideal: 640 },
         },
@@ -47,6 +49,7 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     setIsProcessing(true);
+    setFaceCheckError('');
 
     try {
       const video = videoRef.current;
@@ -62,14 +65,22 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Generate 480px JPEG and 160px thumbnail
+      // STRICT FACE VERIFICATION CHECK (AC1)
+      const faceResult = await verifyFaceInCapturedCanvas(canvas);
+      if (!faceResult.valid) {
+        setFaceCheckError(faceResult.reason || 'No face detected. Please position your face inside the oval.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Generate 480px JPEG and 160px thumbnail only after passing face check
       const photo480 = await compressImageToDimensions(canvas, 480, 0.85);
       const thumb160 = await compressImageToDimensions(canvas, 160, 0.80);
 
       setCapturedPreview(photo480);
       onPhotoCaptured(photo480, thumb160);
     } catch (err) {
-      setCameraError((err as Error).message || 'Failed to capture photo');
+      setFaceCheckError((err as Error).message || 'Failed to inspect photo');
     } finally {
       setIsProcessing(false);
     }
@@ -77,6 +88,7 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
 
   const handleRetake = () => {
     setCapturedPreview(null);
+    setFaceCheckError('');
     startCamera();
   };
 
@@ -85,7 +97,7 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
       <div className="text-center">
         <h3 className="text-base font-bold text-mono-900">Take Live Student Photo</h3>
         <p className="text-xs text-mono-500 mt-0.5">
-          Look directly at the front camera and center your face in the oval.
+          Look directly at the front camera and center your face inside the oval guide.
         </p>
       </div>
 
@@ -105,13 +117,13 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
           </button>
         </div>
       ) : capturedPreview ? (
-        /* Captured Photo Preview */
+        /* Captured Photo Preview (Accepted) */
         <div className="space-y-4">
           <div className="relative aspect-square max-w-[280px] mx-auto rounded-2xl overflow-hidden border-2 border-mono-900">
             <img src={capturedPreview} alt="Captured student" className="w-full h-full object-cover" />
-            <div className="absolute top-2 right-2 bg-mono-950 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+            <div className="absolute top-2 right-2 bg-mono-950 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow">
               <Check className="size-3" />
-              <span>Face Checked</span>
+              <span>Face Verified</span>
             </div>
           </div>
 
@@ -128,6 +140,14 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
       ) : (
         /* Live Camera Stream with Oval Guide */
         <div className="space-y-4">
+          {/* Face Check Failure Alert */}
+          {faceCheckError && (
+            <div className="p-3 bg-mono-100 border-2 border-mono-900 rounded-xl text-xs flex items-center gap-2 text-mono-950 animate-shake">
+              <AlertTriangle className="size-4 text-mono-900 flex-shrink-0" />
+              <span className="font-semibold">{faceCheckError}</span>
+            </div>
+          )}
+
           <div className="relative aspect-square max-w-[280px] mx-auto rounded-2xl overflow-hidden bg-mono-950 border border-mono-300 flex items-center justify-center">
             <video
               ref={videoRef}
@@ -139,14 +159,18 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
 
             {/* Oval Face Guide Overlay (AC1 Requirement) */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-[70%] h-[80%] rounded-[50%] border-2 border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"></div>
+              <div
+                className={`w-[70%] h-[80%] rounded-[50%] border-2 transition-colors ${
+                  faceCheckError ? 'border-red-500 shadow-[0_0_0_9999px_rgba(220,38,38,0.2)]' : 'border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]'
+                }`}
+              ></div>
             </div>
 
             <canvas ref={canvasRef} className="hidden" />
           </div>
 
-          <div className="text-center text-[11px] text-mono-400 font-medium">
-            Make sure your face is well-lit with no sunglasses or face coverings.
+          <div className="text-center text-[11px] text-mono-500 font-medium">
+            Make sure your face fills the oval with good lighting.
           </div>
 
           <div className="flex gap-2">
@@ -178,4 +202,3 @@ export const LivePhotoCapture: React.FC<LivePhotoCaptureProps> = ({ onPhotoCaptu
     </div>
   );
 };
-

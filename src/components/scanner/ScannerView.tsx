@@ -7,9 +7,12 @@ import {
   ChevronDown,
   User,
   ArrowRight,
+  QrCode,
 } from 'lucide-react';
 import { StoredRosterStudent, StoredScanQueueItem } from '@/types/database';
-import { createScannerStamp } from '@/lib/crypto/stamps';
+import { ScannerSignedStamp } from '@/types/crypto';
+import { createScannerStamp, packStampToReceiptString } from '@/lib/crypto/stamps';
+import { QRCodeSVG } from '../common/QRCode';
 import { db } from '@/lib/db/dexie';
 
 interface ScannerViewProps {
@@ -45,6 +48,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [manualSearchResults, setManualSearchResults] = useState<StoredRosterStudent[]>([]);
+
+  // Receipt modal
+  const [latestStamp, setLatestStamp] = useState<ScannerSignedStamp | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   const triggerHaptic = (success: boolean) => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -138,6 +145,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
         await db.enqueueScan(scanQueueItem);
         onScanCommitted(scanQueueItem);
+        setLatestStamp(stamp);
 
         setTimeout(() => {
           setScanState('idle');
@@ -214,6 +222,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
     await db.enqueueScan(scanQueueItem);
     onScanCommitted(scanQueueItem);
+    setLatestStamp(stamp);
     setIsManualModalOpen(false);
     triggerHaptic(true);
   };
@@ -388,7 +397,21 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         </div>
       )}
 
-      {/* 5. Manual Search Button */}
+      {/* 5. Offline Stamp Receipt Button */}
+      {latestStamp && (
+        <div className="bg-white border border-mono-200 rounded-xl p-3">
+          <button
+            type="button"
+            onClick={() => setIsReceiptModalOpen(true)}
+            className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Show Offline Receipt QR ({latestStamp.student_id})</span>
+          </button>
+        </div>
+      )}
+
+      {/* 6. Manual Search Button */}
       <div className="bg-white border border-mono-200 rounded-xl p-3">
         <button
           type="button"
@@ -452,6 +475,48 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Stamp Receipt Modal */}
+      {isReceiptModalOpen && latestStamp && (
+        <div className="fixed inset-0 bg-mono-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-mono-200 max-w-sm w-full rounded-2xl p-6 space-y-4 shadow-xl text-center">
+            <div className="flex items-center justify-between pb-3 border-b border-mono-200">
+              <div className="text-left">
+                <span className="text-[10px] text-mono-400 uppercase font-semibold block">Offline Verification</span>
+                <h3 className="font-bold text-mono-900 text-sm">Attendance Stamp Receipt</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReceiptModalOpen(false)}
+                className="p-1 text-mono-400 hover:text-mono-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex justify-center p-3 bg-white border-2 border-mono-900 rounded-xl">
+              <QRCodeSVG value={packStampToReceiptString(latestStamp)} size={200} />
+            </div>
+
+            <div className="space-y-1 text-xs text-mono-700 bg-mono-50 p-3 rounded-lg border border-mono-200 text-left">
+              <div><strong>Student ID:</strong> {latestStamp.student_id}</div>
+              <div><strong>Event Slot:</strong> {latestStamp.slot_id}</div>
+              <div><strong>Serial No:</strong> {latestStamp.serial_no}</div>
+              <p className="text-[11px] text-mono-500 pt-2 border-t border-mono-200 mt-1">
+                The student can scan this code with their phone to stamp their activity card instantly, even without internet access.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsReceiptModalOpen(false)}
+              className="w-full h-10 bg-mono-950 hover:bg-mono-800 text-white rounded-lg text-xs font-bold transition active:scale-[0.98]"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

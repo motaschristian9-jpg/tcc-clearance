@@ -385,3 +385,4 @@ export const StudentRegistrationFlow: React.FC<StudentRegistrationFlowProps> = (
     </div>
   );
 };
+
