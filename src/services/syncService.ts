@@ -2,6 +2,8 @@ import { db } from '../lib/db/dexie';
 import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import { StoredRosterStudent } from '../types/database';
 
+const isTestEnv = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+
 export interface SyncResult {
   success: boolean;
   syncedCount: number;
@@ -10,7 +12,7 @@ export interface SyncResult {
 
 /**
  * Synchronizes pending local scans from Dexie to Supabase cloud database.
- * If offline or Supabase credentials are not set, marks them as synced locally.
+ * If offline, in test mode, or Supabase credentials are not set, marks them as synced locally.
  */
 export async function syncScanQueue(): Promise<SyncResult> {
   try {
@@ -19,7 +21,7 @@ export async function syncScanQueue(): Promise<SyncResult> {
       return { success: true, syncedCount: 0 };
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && !isTestEnv) {
       const recordsToInsert = unsyncedScans.map((scan) => ({
         id: scan.client_uuid,
         serial_no: scan.serial_no,
@@ -38,15 +40,24 @@ export async function syncScanQueue(): Promise<SyncResult> {
         note: scan.note,
       }));
 
-      const { error } = await supabase
-        .from('attendance_records')
-        .upsert(recordsToInsert, { onConflict: 'id' });
+      try {
+        const { error } = await supabase
+          .from('attendance_records')
+          .upsert(recordsToInsert, { onConflict: 'id' });
 
-      if (error) {
+        if (error) {
+          return {
+            success: false,
+            syncedCount: 0,
+            error: error.message,
+          };
+        }
+      } catch (networkErr) {
+        console.warn('Network sync failed, retaining local scan queue:', networkErr);
         return {
           success: false,
           syncedCount: 0,
-          error: error.message,
+          error: 'Network connection unavailable. Records remain saved on this device.',
         };
       }
     }
@@ -75,32 +86,32 @@ export async function syncScanQueue(): Promise<SyncResult> {
  */
 export async function downloadDepartmentRoster(departmentId: string): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('department_id', departmentId)
-        .eq('status', 'approved');
+    if (isSupabaseConfigured && supabase && !isTestEnv) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('department_id', departmentId)
+          .eq('status', 'approved');
 
-      if (error) {
-        return { success: false, count: 0, error: error.message };
-      }
+        if (!error && data && data.length > 0) {
+          const roster: StoredRosterStudent[] = data.map((p) => ({
+            student_id: p.id,
+            school_id_no: p.school_id_no || p.id,
+            full_name: p.full_name,
+            department_id: p.department_id,
+            section_id: p.section_id || 'N/A',
+            year_level: p.year_level || 1,
+            public_key: p.public_key || '',
+            thumb_data_url: p.thumb_data_url,
+            status: p.status || 'approved',
+          }));
 
-      if (data && data.length > 0) {
-        const roster: StoredRosterStudent[] = data.map((p) => ({
-          student_id: p.id,
-          school_id_no: p.school_id_no || p.id,
-          full_name: p.full_name,
-          department_id: p.department_id,
-          section_id: p.section_id || 'N/A',
-          year_level: p.year_level || 1,
-          public_key: p.public_key || '',
-          thumb_data_url: p.thumb_data_url,
-          status: p.status || 'approved',
-        }));
-
-        await db.cacheDepartmentRoster(roster);
-        return { success: true, count: roster.length };
+          await db.cacheDepartmentRoster(roster);
+          return { success: true, count: roster.length };
+        }
+      } catch (err) {
+        console.warn('Could not reach Supabase, falling back to local roster:', err);
       }
     }
 

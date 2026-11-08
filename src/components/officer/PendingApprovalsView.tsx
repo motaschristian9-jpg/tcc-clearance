@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/db/dexie';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { StoredRosterStudent } from '@/types/database';
 import { Check, X, User, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 
@@ -14,6 +15,36 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
   const [notification, setNotification] = useState<string>('');
 
   const loadPending = async () => {
+    // 1. Sync from Supabase cloud if connected
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('department_id', departmentId)
+          .eq('status', 'pending');
+
+        if (!error && data && data.length > 0) {
+          for (const item of data) {
+            await db.roster.put({
+              student_id: item.id || `std-${item.school_id_no}`,
+              school_id_no: item.school_id_no,
+              full_name: item.full_name,
+              department_id: item.department_id,
+              section_id: item.section_id || 'N/A',
+              year_level: item.year_level || 1,
+              public_key: item.public_key || '',
+              thumb_data_url: item.thumb_data_url || item.photo_url,
+              status: 'pending',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query pending profiles from Supabase:', err);
+      }
+    }
+
+    // 2. Load from Dexie cache
     const list = await db.roster
       .where('department_id')
       .equals(departmentId)
@@ -28,6 +59,18 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
 
   const handleApprove = async (student: StoredRosterStudent) => {
     await db.roster.update(student.student_id, { status: 'approved' });
+
+    // Sync approval to Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status: 'approved' })
+          .eq('school_id_no', student.school_id_no);
+      } catch (err) {
+        console.warn('Failed to update approval on Supabase:', err);
+      }
+    }
 
     // Also update profile if this device belongs to student
     const profile = await db.getProfile();
@@ -44,6 +87,18 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
     if (!selectedRejectStudent) return;
 
     await db.roster.update(selectedRejectStudent.student_id, { status: 'rejected' });
+
+    // Sync rejection to Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status: 'rejected', photo_status: 'needs_retake' })
+          .eq('school_id_no', selectedRejectStudent.school_id_no);
+      } catch (err) {
+        console.warn('Failed to update rejection on Supabase:', err);
+      }
+    }
 
     const profile = await db.getProfile();
     if (profile && profile.school_id_no === selectedRejectStudent.school_id_no) {

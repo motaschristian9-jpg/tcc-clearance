@@ -9,6 +9,7 @@ import {
   packTokenToString,
 } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
+import { supabase, isSupabaseConfigured } from '../lib/supabase/client';
 import { StoredAttendanceRecord, StoredProfile } from '../types/database';
 import { Wifi, WifiOff, Lock, UserPlus, UserCheck } from 'lucide-react';
 
@@ -59,10 +60,41 @@ export const StudentPage: React.FC = () => {
       } else if (!profile) {
         // First-time visitor -> Show registration flow!
         setIsRegistering(true);
+      } else if (profile.status === 'pending') {
+        setCurrentProfile(profile);
       }
     }
     loadStudent();
   }, [eventId]);
+
+  // If student profile is pending, poll Supabase for officer approval
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !currentProfile || currentProfile.status === 'approved') return;
+
+    const interval = setInterval(async () => {
+      if (!supabase) return;
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('school_id_no', currentProfile.school_id_no)
+          .single();
+
+        if (data?.status === 'approved') {
+          await db.profile.update(currentProfile.id, { status: 'approved' });
+          const updated = await db.getProfile();
+          if (updated) {
+            setCurrentProfile(updated);
+            setIsRegistering(false);
+          }
+        }
+      } catch {
+        // Continue silently if offline
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [currentProfile]);
 
   // 30s rotating token timer
   useEffect(() => {

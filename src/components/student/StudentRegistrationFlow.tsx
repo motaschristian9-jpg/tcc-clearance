@@ -3,6 +3,7 @@ import { LivePhotoCapture } from '../camera/LivePhotoCapture';
 import { VALID_DEPARTMENTS, validateStudentProfile } from '@/lib/camera/faceDetector';
 import { generateECDSAKeyPair, exportPublicKeyRaw } from '@/lib/crypto/tokens';
 import { db } from '@/lib/db/dexie';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { StoredProfile, StoredRosterStudent } from '@/types/database';
 import {
   ShieldCheck,
@@ -114,6 +115,30 @@ export const StudentRegistrationFlow: React.FC<StudentRegistrationFlowProps> = (
         status: 'pending',
       };
       await db.roster.put(rosterEntry);
+
+      // 4. If Supabase is connected, sync profile to cloud
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('profiles').upsert(
+            {
+              school_id_no: schoolIdNo.trim(),
+              full_name: fullName.trim(),
+              role: 'student',
+              department_id: department,
+              section_id: section.trim(),
+              year_level: Number(yearLevel),
+              public_key: rawPub,
+              thumb_data_url: t160,
+              photo_url: p480,
+              status: 'pending',
+              photo_status: 'accepted',
+            },
+            { onConflict: 'school_id_no' }
+          );
+        } catch (supErr) {
+          console.warn('Could not sync profile to Supabase:', supErr);
+        }
+      }
 
       setCreatedProfile(newProfile);
       setStep('pending');
