@@ -4,7 +4,7 @@
 
 **Goal:** Build a mobile-first, installable Progressive Web App (PWA) with offline-first ECDSA cryptographic QR check-in, dynamic activity card templating, on-device face verification, and a comprehensive web dashboard for Tagoloan Community College (TCC).
 
-**Architecture:** The client is an offline-first React PWA storing keys and data locally in IndexedDB (Dexie). Rotating student QR tokens and scanner stamps are verified client-side using WebCrypto ECDSA P-256 key pairs without internet connectivity. A Supabase backend provides Google OAuth, PostgreSQL with Row-Level Security (RLS) across 19 tables, and edge functions for batch sync and AI artwork generation.
+**Architecture:** The client is an offline-first React PWA storing keys and data locally in IndexedDB (Dexie). Rotating student QR tokens and scanner stamps are verified client-side using WebCrypto ECDSA P-256 key pairs without internet connectivity. The user interface strictly follows a minimalist utilitarian black-and-white editorial aesthetic and core HCI principles (Fitts's Law, Hick's Law, Nielsen's Status Visibility, WCAG AAA high-contrast sunlight readability). A Supabase backend provides Google OAuth, PostgreSQL with Row-Level Security (RLS) across 19 tables, and edge functions for batch sync and AI artwork generation.
 
 **Tech Stack:** React 19, TypeScript, Vite, Tailwind CSS, `@mediapipe/tasks-vision`, WebCrypto API (ECDSA P-256 + SHA-256), Dexie.js, `@zxing/library`, `qrcode`, `signature_pad`, `html-to-image`, `jspdf`, `exceljs`, Supabase.
 

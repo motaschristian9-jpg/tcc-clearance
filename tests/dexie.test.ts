@@ -112,3 +112,4 @@ describe('Dexie.js Offline Database Operations', () => {
     expect(hasNotCheckedAnotherSlot).toBe(false);
   });
 });
+

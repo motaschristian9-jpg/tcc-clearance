@@ -1,19 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Shield,
   Check,
   X,
-  AlertCircle,
-  RefreshCw,
   Search,
-  MapPin,
   Camera,
   ChevronDown,
   User,
-  UploadCloud,
+  ArrowRight,
 } from 'lucide-react';
 import { StoredRosterStudent, StoredScanQueueItem } from '@/types/database';
-import { verifyStudentQRToken } from '@/lib/crypto/tokens';
 import { createScannerStamp } from '@/lib/crypto/stamps';
 import { db } from '@/lib/db/dexie';
 
@@ -34,9 +29,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   onScanCommitted,
   unsyncedCount,
 }) => {
-  // Current active scanning context
-  const [currentVenue, setCurrentVenue] = useState('Gymnasium Main Gate');
-  const [currentDay, setCurrentDay] = useState(1);
+  const [currentVenue] = useState('Gymnasium Gate');
   const [currentSlot, setCurrentSlot] = useState('day1-morning-in');
   const [currentSlotLabel, setCurrentSlotLabel] = useState('Day 1 Morning In');
   const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
@@ -53,10 +46,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [manualSearchQuery, setManualSearchQuery] = useState('');
   const [manualSearchResults, setManualSearchResults] = useState<StoredRosterStudent[]>([]);
 
-  // Sound / vibration feedback for HCI
   const triggerHaptic = (success: boolean) => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(success ? 80 : [100, 50, 100]);
+      navigator.vibrate(success ? 70 : [100, 50, 100]);
     }
   };
 
@@ -65,54 +57,50 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     setScanState('verifying');
 
     try {
-      // 1. Look up student in offline roster or parse token
       const parts = tokenString.split('.');
       if (parts.length !== 2) {
         setScanState('rejected');
-        setFlagReason('Invalid QR token format');
+        setFlagReason('Invalid QR code');
         triggerHaptic(false);
         return;
       }
 
-      // Read payload
       const payloadBase64 = parts[0];
       const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
       const payload = JSON.parse(payloadJson);
 
-      // 2. Fetch student from Dexie offline roster
       let student = await db.findStudentBySchoolId(payload.sid);
       if (!student) {
-        // Fallback demo mock if not in roster
         student = {
           student_id: payload.sid,
           school_id_no: payload.sid,
           full_name: 'Juan Dela Cruz',
           department_id: departmentId,
           section_id: 'BSIT-3A',
-          public_key: 'mock-public-key',
+          public_key: 'mock-key',
           status: 'approved',
         };
       }
       setScannedStudent(student);
 
-      // 3. Check for offline duplicate scan
+      // Check if student already checked in for this slot
       const isAlreadyCheckedIn = await db.hasStudentCheckedIn('cit-intramurals-2026', currentSlot, student.student_id);
       if (isAlreadyCheckedIn) {
         setScanState('flagged');
-        setFlagReason('Student already checked in for this slot');
+        setFlagReason('Already signed in for this slot');
         triggerHaptic(false);
         return;
       }
 
-      // 4. Check department eligibility
+      // Check department
       if (student.department_id !== departmentId && departmentId !== 'ALL') {
         setScanState('flagged');
-        setFlagReason(`Department mismatch (Student: ${student.department_id}, Scanner: ${departmentId})`);
+        setFlagReason(`From different department (${student.department_id})`);
         triggerHaptic(false);
         return;
       }
 
-      // 5. Verification passed -> Green state with auto-commit in 1.5s
+      // Valid: Show green accept with 1.5s auto-commit
       setScanState('accepted');
       triggerHaptic(true);
 
@@ -151,7 +139,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         await db.enqueueScan(scanQueueItem);
         onScanCommitted(scanQueueItem);
 
-        // Reset after auto commit
         setTimeout(() => {
           setScanState('idle');
           setScannedStudent(null);
@@ -161,9 +148,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
       const timer = window.setTimeout(commitItem, 1500);
       setAutoCommitTimer(timer);
-    } catch (err) {
+    } catch {
       setScanState('rejected');
-      setFlagReason((err as Error).message || 'Verification error');
+      setFlagReason('QR code not recognized');
       triggerHaptic(false);
     }
   };
@@ -222,7 +209,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       signature: stamp.signature,
       status: 'valid',
       synced: false,
-      note: 'Manual check-in by SBO officer',
+      note: 'Manual entry',
     };
 
     await db.enqueueScan(scanQueueItem);
@@ -233,47 +220,46 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
   return (
     <div className="space-y-4 max-w-xl mx-auto">
-      {/* 1. Status Strip (Nielsen Heuristic: System Status Visibility) */}
-      <div className="bg-white border border-mono-200 rounded-xl p-3 flex items-center justify-between text-xs font-mono">
+      {/* 1. Status Bar */}
+      <div className="bg-white border border-mono-200 rounded-xl p-3 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-mono-900"></span>
-          <span className="font-bold text-mono-900">OFFLINE SCANNER READY</span>
+          <span className="font-bold text-mono-900">Ready to Scan</span>
         </div>
-        <div className="flex items-center gap-2">
-          <UploadCloud className="w-4 h-4 text-mono-500" />
-          <span className="text-mono-600 font-semibold">{unsyncedCount} scans to sync</span>
+        <div className="text-mono-600 font-medium">
+          {unsyncedCount === 0 ? 'All scans saved' : `${unsyncedCount} saved on this phone`}
         </div>
       </div>
 
-      {/* 2. Venue and Slot Banner (Impossible to miss per design brief) */}
+      {/* 2. Venue and Slot Banner */}
       <button
         type="button"
         onClick={() => setIsSlotPickerOpen(!isSlotPickerOpen)}
         className="w-full bg-mono-900 text-white rounded-xl p-4 flex items-center justify-between transition active:scale-[0.99] text-left"
       >
         <div>
-          <span className="text-[10px] font-mono uppercase text-mono-400 block tracking-widest">
-            Scanning at: {currentVenue}
+          <span className="text-[11px] text-mono-400 block uppercase tracking-wider">
+            Location: {currentVenue}
           </span>
-          <h2 className="text-base font-black tracking-tight mt-0.5">{currentSlotLabel}</h2>
+          <h2 className="text-lg font-bold mt-0.5">{currentSlotLabel}</h2>
         </div>
-        <div className="flex items-center gap-1.5 text-xs font-mono text-mono-300 bg-white/10 px-2.5 py-1 rounded">
-          <span>Change</span>
+        <div className="flex items-center gap-1 text-xs text-mono-300 bg-white/10 px-2.5 py-1 rounded">
+          <span>Change Slot</span>
           <ChevronDown className="w-3.5 h-3.5" />
         </div>
       </button>
 
-      {/* Slot Selector Dropdown */}
+      {/* Slot Picker Dropdown */}
       {isSlotPickerOpen && (
-        <div className="bg-white border border-mono-200 rounded-xl p-3 space-y-2 text-xs font-mono">
-          <div className="text-mono-400 uppercase text-[10px] pb-1 border-b border-mono-200">
-            Select Active Attendance Slot
+        <div className="bg-white border border-mono-200 rounded-xl p-3 space-y-2 text-xs">
+          <div className="text-mono-400 uppercase text-[11px] font-semibold pb-1 border-b border-mono-200">
+            Select Slot to Scan
           </div>
           {[
-            { id: 'day1-morning-in', label: 'Day 1 Morning In (Time In)' },
-            { id: 'day1-morning-out', label: 'Day 1 Morning Out (Time Out)' },
-            { id: 'day1-afternoon-in', label: 'Day 1 Afternoon In (Time In)' },
-            { id: 'day1-afternoon-out', label: 'Day 1 Afternoon Out (Time Out)' },
+            { id: 'day1-morning-in', label: 'Day 1 Morning In (Morning Arrival)' },
+            { id: 'day1-morning-out', label: 'Day 1 Morning Out (Lunch Exit)' },
+            { id: 'day1-afternoon-in', label: 'Day 1 Afternoon In (Afternoon Arrival)' },
+            { id: 'day1-afternoon-out', label: 'Day 1 Afternoon Out (Dismissal)' },
           ].map((slot) => (
             <button
               key={slot.id}
@@ -282,7 +268,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 setCurrentSlotLabel(slot.label);
                 setIsSlotPickerOpen(false);
               }}
-              className={`w-full text-left p-2.5 rounded transition ${
+              className={`w-full text-left p-3 rounded-lg transition ${
                 currentSlot === slot.id ? 'bg-mono-900 text-white font-bold' : 'hover:bg-mono-100 text-mono-800'
               }`}
             >
@@ -292,34 +278,34 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         </div>
       )}
 
-      {/* 3. Camera / Viewfinder Box */}
+      {/* 3. Camera / Scanner View */}
       <div className="bg-white border border-mono-200 rounded-xl p-6 text-center space-y-4">
-        <div className="relative aspect-video max-h-64 bg-mono-100 border border-mono-200 rounded-lg flex flex-col items-center justify-center p-4">
+        <div className="relative aspect-video max-h-56 bg-mono-100 border border-mono-200 rounded-lg flex flex-col items-center justify-center p-4">
           <Camera className="w-10 h-10 text-mono-400 mb-2" />
-          <span className="text-xs font-mono text-mono-500">Camera Viewfinder Active</span>
+          <span className="text-xs text-mono-500 font-medium">Point camera at student QR code</span>
           <div className="absolute inset-8 border border-dashed border-mono-400 pointer-events-none rounded"></div>
         </div>
 
-        {/* Rapid Simulator Input for immediate testing */}
+        {/* Quick Test / Scan Simulation Input */}
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Paste or simulate token string..."
+            placeholder="Scan or enter code..."
             value={simulatedTokenInput}
             onChange={(e) => setSimulatedTokenInput(e.target.value)}
-            className="flex-1 min-h-touch border border-mono-300 rounded-lg px-3 text-xs font-mono focus:border-mono-900 outline-none"
+            className="flex-1 min-h-touch border border-mono-300 rounded-lg px-3 text-xs focus:border-mono-900 outline-none"
           />
           <button
             type="button"
             onClick={() => handleProcessScan(simulatedTokenInput)}
-            className="min-h-touch px-4 bg-mono-900 hover:bg-mono-800 text-white text-xs font-mono font-bold rounded-lg transition active:scale-[0.98]"
+            className="min-h-touch px-4 bg-mono-900 hover:bg-mono-800 text-white text-xs font-bold rounded-lg transition active:scale-[0.98]"
           >
-            Scan
+            Check In
           </button>
         </div>
       </div>
 
-      {/* 4. Result Inspection Card (Photo takes >= 40% width per design brief) */}
+      {/* 4. Student Photo & Verification Card */}
       {scanState !== 'idle' && (
         <div
           className={`border-2 rounded-xl p-5 bg-white transition-all ${
@@ -334,54 +320,54 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         >
           {scannedStudent && (
             <div className="flex gap-4 items-center">
-              {/* Photo >= 40% width */}
+              {/* Photo at least 40% width */}
               <div className="w-2/5 aspect-square bg-mono-200 border border-mono-300 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                <User className="w-14 h-14 text-mono-400" />
+                <User className="w-12 h-12 text-mono-400" />
               </div>
 
-              {/* Student Metadata in Large Type (24px) */}
+              {/* Student Details */}
               <div className="flex-1 space-y-1">
-                <span className="text-[10px] font-mono text-mono-500 block uppercase">
+                <span className="text-xs text-mono-500 block">
                   {scannedStudent.school_id_no} &bull; {scannedStudent.department_id}
                 </span>
                 <h3 className="text-xl sm:text-2xl font-black text-mono-900 leading-tight">
                   {scannedStudent.full_name}
                 </h3>
-                <span className="text-xs font-mono font-bold text-mono-700 block">
+                <span className="text-xs font-semibold text-mono-700 block">
                   {scannedStudent.section_id}
                 </span>
 
                 {scanState === 'accepted' && (
-                  <div className="inline-flex items-center gap-1 text-xs font-mono font-bold text-mono-900 mt-2 bg-mono-100 px-2 py-0.5 rounded border border-mono-300">
+                  <div className="inline-flex items-center gap-1 text-xs font-bold text-mono-900 mt-2 bg-mono-100 px-2 py-0.5 rounded border border-mono-300">
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>Auto-committing in 1.5s</span>
+                    <span>Checked in! (Saving...)</span>
                   </div>
                 )}
 
                 {scanState === 'flagged' && (
-                  <div className="text-xs font-mono text-mono-800 mt-2">
-                    <strong>FLAGGED:</strong> {flagReason}
+                  <div className="text-xs text-mono-800 mt-2 font-medium">
+                    <strong>Check:</strong> {flagReason}
                   </div>
                 )}
 
                 {scanState === 'rejected' && (
-                  <div className="text-xs font-mono text-mono-900 font-bold mt-2">
-                    <strong>REJECTED:</strong> {flagReason}
+                  <div className="text-xs text-mono-900 font-bold mt-2">
+                    <strong>Rejected:</strong> {flagReason}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* Action buttons (Reject always reachable with thumb per HCI rules) */}
+          {/* Action buttons */}
           <div className="mt-4 pt-3 border-t border-mono-200 flex gap-2">
             <button
               type="button"
-              onClick={() => handleRejectScan('Photo does not match person')}
-              className="flex-1 min-h-touch border border-mono-900 hover:bg-mono-100 text-mono-900 text-xs font-mono font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+              onClick={() => handleRejectScan('Not this person')}
+              className="flex-1 min-h-touch border border-mono-900 hover:bg-mono-100 text-mono-900 text-xs font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
             >
               <X className="w-4 h-4" />
-              <span>Reject (Wrong Person)</span>
+              <span>Not This Person</span>
             </button>
 
             {scanState === 'flagged' && (
@@ -392,25 +378,25 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     handleCommitManual(scannedStudent);
                   }
                 }}
-                className="flex-1 min-h-touch bg-mono-900 hover:bg-mono-800 text-white text-xs font-mono font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="flex-1 min-h-touch bg-mono-900 hover:bg-mono-800 text-white text-xs font-bold rounded-lg py-2.5 transition active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                <span>Override &amp; Accept</span>
+                <span>Confirm Check-in</span>
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* 5. Bottom Navigation Bar (Thumb reachable) */}
-      <div className="bg-white border border-mono-200 rounded-xl p-3 flex gap-2">
+      {/* 5. Manual Search Button */}
+      <div className="bg-white border border-mono-200 rounded-xl p-3">
         <button
           type="button"
           onClick={() => setIsManualModalOpen(true)}
-          className="flex-1 min-h-touch border border-mono-300 hover:border-mono-900 rounded-lg text-xs font-mono font-bold text-mono-900 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+          className="w-full min-h-touch border border-mono-300 hover:border-mono-900 rounded-lg text-xs font-bold text-mono-900 flex items-center justify-center gap-2 transition active:scale-[0.98]"
         >
-          <Search className="w-3.5 h-3.5" />
-          <span>Manual Check-in</span>
+          <Search className="w-4 h-4" />
+          <span>Search Student by ID or Name</span>
         </button>
       </div>
 
@@ -419,7 +405,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         <div className="fixed inset-0 bg-mono-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-mono-200 max-w-md w-full rounded-2xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-mono-200">
-              <h3 className="font-bold text-mono-900 text-base">Manual Student Check-in</h3>
+              <h3 className="font-bold text-mono-900 text-base">Search Student</h3>
               <button
                 type="button"
                 onClick={() => setIsManualModalOpen(false)}
@@ -429,19 +415,17 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               </button>
             </div>
 
-            <p className="text-xs text-mono-500 font-mono">
-              Use for students with dead batteries, broken cameras, or offline phone issues.
+            <p className="text-xs text-mono-500">
+              Find a student if their phone battery died or camera is broken.
             </p>
 
-            <div className="space-y-2">
-              <input
-                type="text"
-                placeholder="Search by Name or School ID..."
-                value={manualSearchQuery}
-                onChange={(e) => handleManualSearch(e.target.value)}
-                className="w-full min-h-touch border border-mono-300 rounded-lg px-3 text-xs font-mono focus:border-mono-900 outline-none"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Type student name or ID number..."
+              value={manualSearchQuery}
+              onChange={(e) => handleManualSearch(e.target.value)}
+              className="w-full min-h-touch border border-mono-300 rounded-lg px-3 text-xs focus:border-mono-900 outline-none"
+            />
 
             <div className="max-h-60 overflow-y-auto divide-y divide-mono-100 border border-mono-200 rounded-lg">
               {manualSearchResults.length > 0 ? (
@@ -449,22 +433,22 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   <div key={student.student_id} className="p-3 flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-xs text-mono-900">{student.full_name}</h4>
-                      <p className="text-[11px] font-mono text-mono-500">
+                      <p className="text-xs text-mono-500">
                         {student.school_id_no} &bull; {student.section_id}
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleCommitManual(student)}
-                      className="min-h-touch px-3 py-1.5 bg-mono-900 hover:bg-mono-800 text-white rounded text-xs font-mono font-bold transition active:scale-[0.98]"
+                      className="min-h-touch px-3 py-1.5 bg-mono-900 hover:bg-mono-800 text-white rounded text-xs font-bold transition active:scale-[0.98]"
                     >
                       Sign In
                     </button>
                   </div>
                 ))
               ) : (
-                <div className="p-4 text-center text-xs font-mono text-mono-400">
-                  {manualSearchQuery ? 'No matching students' : 'Type to search department roster'}
+                <div className="p-4 text-center text-xs text-mono-400">
+                  {manualSearchQuery ? 'No student found' : 'Type to search students'}
                 </div>
               )}
             </div>

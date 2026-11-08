@@ -116,3 +116,4 @@ export interface StoredEvent {
   venues: StoredEventVenue[];
   version: number;
 }
+

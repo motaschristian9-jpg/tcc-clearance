@@ -104,3 +104,4 @@ export class TCCDatabase extends Dexie {
 }
 
 export const db = new TCCDatabase();
+

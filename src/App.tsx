@@ -15,11 +15,11 @@ import {
   Smartphone,
   ScanLine,
   FileCheck2,
-  Database,
-  CloudOff,
-  Cloud,
+  FolderDown,
+  WifiOff,
+  Wifi,
   CheckCircle,
-  Shield,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function App() {
@@ -27,7 +27,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
 
-  // Student cryptographic state
+  // Student state
   const [studentKeys, setStudentKeys] = useState<{ privateKey: CryptoKey; publicKeyRaw: string } | null>(null);
   const [studentId] = useState('2023-01042');
   const [studentName] = useState('Juan Dela Cruz');
@@ -37,7 +37,7 @@ export default function App() {
   const [tokenString, setTokenString] = useState<string>('');
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30);
 
-  // SBO Scanner cryptographic key
+  // Scanner state
   const [scannerKey, setScannerKey] = useState<CryptoKey | null>(null);
   const [scannerKeyId] = useState('SCANNER-CIT-01');
   const [officerId] = useState('officer-sbo-auditor-1');
@@ -53,7 +53,6 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial check
     setIsOnline(navigator.onLine);
 
     return () => {
@@ -62,19 +61,16 @@ export default function App() {
     };
   }, []);
 
-  // Initialize WebCrypto keys and seed initial department roster
+  // Initialize keys and seed roster
   useEffect(() => {
     async function initKeys() {
-      // 1. Generate Student ECDSA Key Pair
       const sKeyPair = await generateECDSAKeyPair(false);
       const sPubRaw = await exportPublicKeyRaw(sKeyPair.publicKey);
       setStudentKeys({ privateKey: sKeyPair.privateKey, publicKeyRaw: sPubRaw });
 
-      // 2. Generate SBO Scanner ECDSA Key Pair
       const scKeyPair = await generateECDSAKeyPair(false);
       setScannerKey(scKeyPair.privateKey);
 
-      // 3. Seed offline department roster in Dexie if empty
       const existingRoster = await db.roster.count();
       if (existingRoster === 0) {
         const seedStudents: StoredRosterStudent[] = [
@@ -112,11 +108,9 @@ export default function App() {
         await db.cacheDepartmentRoster(seedStudents);
       }
 
-      // Initial count of unsynced scans
       const count = await db.getUnsyncedScanCount();
       setUnsyncedCount(count);
 
-      // Load initial attendance
       const records = await db.getStudentAttendance('std-2023-01042', eventId);
       setAttendanceRecords(records);
     }
@@ -157,7 +151,6 @@ export default function App() {
 
   // Handle new scan committed from scanner
   const handleScanCommitted = async (scan: StoredScanQueueItem) => {
-    // Add to attendance records for the student
     const newRecord: StoredAttendanceRecord = {
       id: scan.client_uuid,
       client_uuid: scan.client_uuid,
@@ -177,11 +170,9 @@ export default function App() {
 
     await db.attendance.put(newRecord);
 
-    // Refresh student attendance
     const records = await db.getStudentAttendance('std-2023-01042', eventId);
     setAttendanceRecords(records);
 
-    // Update unsynced count
     const count = await db.getUnsyncedScanCount();
     setUnsyncedCount(count);
   };
@@ -196,33 +187,33 @@ export default function App() {
   return (
     <InstallGate>
       <div className="min-h-screen bg-mono-50 text-mono-900 flex flex-col font-sans">
-        {/* Utilitarian Monochrome Navbar */}
+        {/* Simple Minimalist Header */}
         <header className="bg-white border-b border-mono-200 sticky top-0 z-40">
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-mono-950 text-white font-mono font-bold rounded flex items-center justify-center text-xs">
+              <div className="w-8 h-8 bg-mono-900 text-white font-bold rounded-lg flex items-center justify-center text-xs">
                 TCC
               </div>
               <div>
-                <h1 className="text-sm font-bold tracking-tight text-mono-900 leading-none">
+                <h1 className="text-sm font-bold text-mono-900 leading-none">
                   Event Clearance
                 </h1>
-                <span className="text-[10px] font-mono text-mono-400">Tagoloan Community College</span>
+                <span className="text-[11px] text-mono-500">Tagoloan Community College</span>
               </div>
             </div>
 
-            {/* System Status Indicators (HCI: Nielsen Heuristic 1) */}
-            <div className="flex items-center gap-3 text-xs font-mono">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-mono-200 text-mono-600">
+            {/* Simple Status */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-mono-200 text-mono-700 bg-mono-50 font-medium">
                 {isOnline ? (
                   <>
-                    <Cloud className="w-3 h-3 text-mono-900" />
+                    <Wifi className="w-3.5 h-3.5 text-mono-900" />
                     <span>Online</span>
                   </>
                 ) : (
                   <>
-                    <CloudOff className="w-3 h-3 text-mono-400" />
-                    <span>Offline Mode</span>
+                    <WifiOff className="w-3.5 h-3.5 text-mono-400" />
+                    <span>Working Offline</span>
                   </>
                 )}
               </span>
@@ -231,71 +222,71 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleSimulateSync}
-                  className="px-2 py-0.5 bg-mono-900 text-white font-bold rounded text-[11px] flex items-center gap-1 transition active:scale-[0.98]"
+                  className="px-3 py-1 bg-mono-900 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition active:scale-[0.98]"
                 >
                   <span>Sync ({unsyncedCount})</span>
                 </button>
               ) : (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-mono-500">
-                  <CheckCircle className="w-3 h-3 text-mono-900" />
-                  <span>Synced</span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-xs text-mono-500 font-medium">
+                  <CheckCircle className="w-3.5 h-3.5 text-mono-900" />
+                  <span>All Saved</span>
                 </span>
               )}
             </div>
           </div>
 
-          {/* Minimalist Segmented Navigation Tabs (Fitts's Law + Hick's Law) */}
+          {/* Simple Tabs */}
           <div className="max-w-4xl mx-auto px-4 flex gap-1 border-t border-mono-100 overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveTab('student')}
-              className={`min-h-touch px-4 py-2.5 text-xs font-mono font-bold flex items-center gap-2 border-b-2 transition ${
+              className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
                 activeTab === 'student'
                   ? 'border-mono-900 text-mono-900'
                   : 'border-transparent text-mono-400 hover:text-mono-700'
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>Student Card</span>
+              <span>My Card</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('scanner')}
-              className={`min-h-touch px-4 py-2.5 text-xs font-mono font-bold flex items-center gap-2 border-b-2 transition ${
+              className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
                 activeTab === 'scanner'
                   ? 'border-mono-900 text-mono-900'
                   : 'border-transparent text-mono-400 hover:text-mono-700'
               }`}
             >
               <ScanLine className="w-3.5 h-3.5" />
-              <span>SBO Scanner</span>
+              <span>Scanner</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('check-card')}
-              className={`min-h-touch px-4 py-2.5 text-xs font-mono font-bold flex items-center gap-2 border-b-2 transition ${
+              className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
                 activeTab === 'check-card'
                   ? 'border-mono-900 text-mono-900'
                   : 'border-transparent text-mono-400 hover:text-mono-700'
               }`}
             >
               <FileCheck2 className="w-3.5 h-3.5" />
-              <span>Clearance Audit</span>
+              <span>Check Clearance</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('database')}
-              className={`min-h-touch px-4 py-2.5 text-xs font-mono font-bold flex items-center gap-2 border-b-2 transition ${
+              className={`min-h-touch px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
                 activeTab === 'database'
                   ? 'border-mono-900 text-mono-900'
                   : 'border-transparent text-mono-400 hover:text-mono-700'
               }`}
             >
-              <Database className="w-3.5 h-3.5" />
-              <span>System &amp; Roster</span>
+              <FolderDown className="w-3.5 h-3.5" />
+              <span>Saved Records</span>
             </button>
           </div>
         </header>
@@ -336,34 +327,40 @@ export default function App() {
               <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-mono-200">
                   <div>
-                    <span className="text-[11px] font-mono uppercase tracking-widest text-mono-500">
-                      Dexie.js Offline Cache
+                    <span className="text-xs text-mono-500 uppercase font-semibold">
+                      Device Storage
                     </span>
-                    <h3 className="text-base font-bold text-mono-900">Department Roster &amp; Sync Status</h3>
+                    <h3 className="text-base font-bold text-mono-900">Saved Attendance Records</h3>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSimulateSync}
-                    className="min-h-touch px-3 py-1.5 bg-mono-900 text-white rounded text-xs font-mono font-bold hover:bg-mono-800 transition active:scale-[0.98]"
-                  >
-                    Sync Queue to Cloud
-                  </button>
+                  {unsyncedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSimulateSync}
+                      className="min-h-touch px-4 py-2 bg-mono-900 text-white rounded-lg text-xs font-bold hover:bg-mono-800 transition active:scale-[0.98]"
+                    >
+                      Send to Server Now
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  <div className="border border-mono-200 p-3 rounded-lg">
-                    <span className="text-mono-400 block text-[10px] uppercase">Roster Cached</span>
-                    <span className="text-xl font-bold text-mono-900">3 Students</span>
+                <p className="text-xs text-mono-600 leading-relaxed">
+                  Scans are saved directly on this phone so the app works even when there is no Wi-Fi or mobile data at the venue. When internet is available, scans automatically sync with the school records.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="border border-mono-200 p-4 rounded-xl">
+                    <span className="text-mono-400 block text-xs">Students on Phone</span>
+                    <span className="text-2xl font-bold text-mono-900 mt-1 block">3 Students</span>
                   </div>
-                  <div className="border border-mono-200 p-3 rounded-lg">
-                    <span className="text-mono-400 block text-[10px] uppercase">Unsynced Records</span>
-                    <span className="text-xl font-bold text-mono-900">{unsyncedCount} Pending</span>
+                  <div className="border border-mono-200 p-4 rounded-xl">
+                    <span className="text-mono-400 block text-xs">Pending Upload</span>
+                    <span className="text-2xl font-bold text-mono-900 mt-1 block">{unsyncedCount} Scans</span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-mono-100 rounded-lg text-xs font-mono text-mono-700 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-mono-900 flex-shrink-0" />
-                  <span>WebCrypto ECDSA P-256 keys active in non-extractable IndexedDB memory.</span>
+                <div className="p-3 bg-mono-100 rounded-lg text-xs text-mono-700 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-mono-900 flex-shrink-0" />
+                  <span>Security keys are safely stored on this device.</span>
                 </div>
               </div>
             </div>

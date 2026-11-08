@@ -67,42 +67,42 @@ export const InstallGate: React.FC<InstallGateProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-mono-50 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl border border-mono-200 overflow-hidden text-mono-900">
-        {/* Minimalist Monochrome Header */}
+      <div className="max-w-md w-full bg-white rounded-2xl border border-mono-200 overflow-hidden text-mono-900 shadow-sm">
+        {/* Simple Header */}
         <div className="border-b border-mono-200 p-6 text-center">
-          <div className="w-12 h-12 bg-mono-900 text-white rounded-lg mx-auto flex items-center justify-center mb-3">
+          <div className="w-12 h-12 bg-mono-900 text-white rounded-xl mx-auto flex items-center justify-center mb-3">
             <Smartphone className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-mono-900">TCC Clearance App</h1>
-          <p className="text-xs text-mono-500 font-mono mt-0.5">Tagoloan Community College</p>
+          <h1 className="text-lg font-bold text-mono-900">TCC Clearance App</h1>
+          <p className="text-xs text-mono-500 mt-0.5">Tagoloan Community College</p>
         </div>
 
         <div className="p-6 space-y-6">
           {isInApp ? (
             <div className="space-y-4">
-              <div className="p-4 bg-mono-100 border border-mono-300 rounded-lg text-mono-900">
+              <div className="p-4 bg-mono-100 border border-mono-200 rounded-xl text-mono-900">
                 <div className="flex items-center gap-2 font-bold text-sm mb-1">
                   <ExternalLink className="w-4 h-4 text-mono-900 flex-shrink-0" />
-                  In-App Browser Detected
+                  Open in Chrome or Safari
                 </div>
                 <p className="text-xs text-mono-600 leading-relaxed">
-                  In-app browsers cannot install web apps or access offline biometric storage. Open in Chrome or Safari.
+                  Facebook and Messenger cannot install apps or use the camera properly. Please open this link in your standard browser.
                 </p>
               </div>
 
               <div className="text-xs text-mono-600 font-medium">
-                1. Tap the three dots (•••) at top right.<br />
-                2. Select <strong>"Open in Browser"</strong>.<br />
+                1. Tap the three dots (•••) at the top right.<br />
+                2. Tap <strong>"Open in Chrome"</strong> or <strong>"Open in Safari"</strong>.<br />
                 Or copy the direct link below:
               </div>
 
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-sm rounded-lg py-3 px-4 flex items-center justify-center gap-2 transition active:scale-[0.98]"
+                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-xs rounded-lg py-3 px-4 flex items-center justify-center gap-2 transition active:scale-[0.98]"
               >
                 {copied ? <Check className="w-4 h-4 text-mono-200" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied' : 'Copy Direct Link'}
+                {copied ? 'Link Copied!' : 'Copy Link'}
               </button>
             </div>
           ) : isIosDevice ? (
@@ -110,27 +110,27 @@ export const InstallGate: React.FC<InstallGateProps> = ({ children }) => {
               <div className="text-center">
                 <h2 className="text-base font-bold text-mono-900">Install to Continue</h2>
                 <p className="text-xs text-mono-500 mt-1">
-                  Offline card stamps require home screen installation.
+                  Add this app to your home screen so it works even without internet on event day.
                 </p>
               </div>
 
-              <div className="border border-mono-200 rounded-lg p-4 space-y-3 text-xs text-mono-700">
+              <div className="border border-mono-200 rounded-xl p-4 space-y-3 text-xs text-mono-700">
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     1
                   </span>
-                  <span>Tap <strong>Share</strong> <Share className="w-3.5 h-3.5 inline mx-0.5" /> in Safari.</span>
+                  <span>Tap the <strong>Share</strong> button <Share className="w-3.5 h-3.5 inline mx-0.5" /> at the bottom of Safari.</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     2
                   </span>
-                  <span>Tap <strong>Add to Home Screen</strong> <PlusSquare className="w-3.5 h-3.5 inline mx-0.5" />.</span>
+                  <span>Scroll down and tap <strong>"Add to Home Screen"</strong> <PlusSquare className="w-3.5 h-3.5 inline mx-0.5" />.</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     3
                   </span>
                   <span>Open <strong>TCC Clearance</strong> from your home screen.</span>
@@ -147,21 +147,21 @@ export const InstallGate: React.FC<InstallGateProps> = ({ children }) => {
               <div>
                 <h2 className="text-base font-bold text-mono-900">Install to Continue</h2>
                 <p className="text-xs text-mono-500 mt-1">
-                  Install the official clearance app for offline scanning and card stamping.
+                  Install the TCC Clearance app on your phone to scan and view your activity card offline.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleInstallClick}
-                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-sm rounded-lg py-3 px-4 transition active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-xs rounded-lg py-3 px-4 transition active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 <PlusSquare className="w-4 h-4" />
-                Install Application
+                Install App
               </button>
 
-              <p className="text-[11px] text-mono-400 font-mono">
-                Browser Menu &rarr; Install app / Add to Home screen
+              <p className="text-[11px] text-mono-400">
+                Or tap the browser menu (⋮) &rarr; "Add to Home screen"
               </p>
             </div>
           )}

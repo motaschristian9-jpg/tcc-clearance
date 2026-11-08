@@ -33,7 +33,6 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
-    // Find student by ID or name
     let student = await db.findStudentBySchoolId(searchQuery.trim());
     if (!student) {
       student = await db.roster
@@ -43,7 +42,6 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
 
     if (student) {
       setSelectedStudent(student);
-      // Fetch attendance
       const records = await db.getStudentAttendance(student.student_id, 'cit-intramurals-2026');
       setAttendanceList(records);
     } else {
@@ -64,10 +62,10 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-4">
         <div>
-          <span className="text-[11px] font-mono uppercase tracking-widest text-mono-500">Official Audit</span>
-          <h2 className="text-lg font-bold text-mono-900">SBO Clearance Record Verification</h2>
-          <p className="text-xs text-mono-500 mt-0.5">
-            Verifies activity clearance from signed database records &mdash; immune to edited or photoshopped cards.
+          <span className="text-xs text-mono-500 uppercase font-semibold">Clearance Check</span>
+          <h2 className="text-lg font-bold text-mono-900">Check Student Clearance</h2>
+          <p className="text-xs text-mono-600 mt-1">
+            Search a student's ID number to see if they completed all attendance slots for this event.
           </p>
         </div>
 
@@ -75,18 +73,18 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
         <form onSubmit={handleSearch} className="flex gap-2">
           <input
             type="text"
-            placeholder="Enter Student School ID (e.g. 2023-01042)..."
+            placeholder="Enter Student ID (e.g. 2023-01042)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 min-h-touch border border-mono-300 rounded-lg px-3 text-xs font-mono focus:border-mono-900 outline-none"
+            className="flex-1 min-h-touch border border-mono-300 rounded-lg px-3 text-xs focus:border-mono-900 outline-none"
           />
           <button
             type="submit"
             disabled={isSearching}
-            className="min-h-touch px-5 bg-mono-900 hover:bg-mono-800 text-white rounded-lg text-xs font-mono font-bold transition active:scale-[0.98] flex items-center gap-1.5"
+            className="min-h-touch px-5 bg-mono-900 hover:bg-mono-800 text-white rounded-lg text-xs font-bold transition active:scale-[0.98] flex items-center gap-1.5"
           >
             <Search className="w-3.5 h-3.5" />
-            <span>Verify</span>
+            <span>Search</span>
           </button>
         </form>
       </div>
@@ -95,59 +93,59 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
         <div className="bg-white border border-mono-200 rounded-xl p-6 space-y-6">
           {/* Student Profile Header */}
           <div className="flex items-center gap-4 pb-4 border-b border-mono-200">
-            <div className="w-16 h-16 rounded-lg bg-mono-100 border border-mono-200 flex items-center justify-center flex-shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-mono-100 border border-mono-200 flex items-center justify-center flex-shrink-0">
               <User className="w-8 h-8 text-mono-400" />
             </div>
             <div className="flex-1">
-              <span className="text-[10px] font-mono text-mono-400 uppercase block">
+              <span className="text-xs text-mono-500 block">
                 {selectedStudent.school_id_no} &bull; {selectedStudent.department_id}
               </span>
-              <h3 className="text-xl font-black text-mono-900">{selectedStudent.full_name}</h3>
-              <p className="text-xs font-mono text-mono-600">{selectedStudent.section_id}</p>
+              <h3 className="text-xl font-bold text-mono-900">{selectedStudent.full_name}</h3>
+              <p className="text-xs text-mono-600">{selectedStudent.section_id}</p>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-black font-mono text-mono-900">
+              <div className="text-2xl font-bold text-mono-900">
                 {totalVerified} <span className="text-xs font-normal text-mono-400">/ 20</span>
               </div>
-              <span className="text-[10px] font-mono text-mono-500 uppercase">Slots Cleared</span>
+              <span className="text-[11px] text-mono-500">Signatures</span>
             </div>
           </div>
 
           {/* Verification Matrix */}
           <div className="space-y-3">
-            <h4 className="text-xs font-mono uppercase tracking-wider text-mono-500">
-              Cryptographic Attendance Matrix
+            <h4 className="text-xs uppercase tracking-wider text-mono-500 font-semibold">
+              Event Attendance Record
             </h4>
 
             <div className="space-y-3">
               {DAYS.map((day) => (
                 <div key={day.dayNo} className="border border-mono-200 rounded-lg overflow-hidden">
-                  <div className="bg-mono-100 px-3 py-1.5 text-xs font-mono font-bold text-mono-900 border-b border-mono-200 flex justify-between">
+                  <div className="bg-mono-100 px-3 py-1.5 text-xs font-bold text-mono-900 border-b border-mono-200 flex justify-between">
                     <span>{day.label}</span>
-                    <span className="text-[10px] text-mono-500 uppercase">Intramurals 2026</span>
+                    <span className="text-[11px] text-mono-500">Intramurals 2026</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-mono-100 bg-white">
                     {SLOTS.map((slot) => {
                       const record = getSlotStatus(day.dayNo, slot.id);
                       return (
-                        <div key={slot.id} className="p-3 flex items-center justify-between text-xs font-mono">
+                        <div key={slot.id} className="p-3 flex items-center justify-between text-xs">
                           <div>
                             <span className="font-bold text-mono-900 block">{slot.label}</span>
-                            <span className="text-[10px] text-mono-400">
-                              {record ? `Signed at ${new Date(record.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No verified record'}
+                            <span className="text-[11px] text-mono-400">
+                              {record ? `Signed at ${new Date(record.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not yet signed'}
                             </span>
                           </div>
 
                           {record ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-mono-900 border border-mono-900 px-2 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-mono-900 border border-mono-900 px-2 py-0.5 rounded">
                               <Check className="w-3.5 h-3.5 stroke-[3]" />
-                              <span>CLEARED</span>
+                              <span>Signed</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-mono-400 border border-mono-200 px-2 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-mono-400 border border-mono-200 px-2 py-0.5 rounded">
                               <AlertOctagon className="w-3.5 h-3.5" />
-                              <span>MISSING</span>
+                              <span>Missing</span>
                             </span>
                           )}
                         </div>
@@ -159,14 +157,14 @@ export const CheckCardView: React.FC<CheckCardViewProps> = () => {
             </div>
           </div>
 
-          <div className="p-3 bg-mono-50 border border-mono-200 rounded-lg text-xs font-mono text-mono-600 flex items-center gap-2">
+          <div className="p-3 bg-mono-50 border border-mono-200 rounded-lg text-xs text-mono-600 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-mono-900 flex-shrink-0" />
-            <span>All records signed by authorized scanner ECDSA cryptographic keys.</span>
+            <span>Official digital record verified.</span>
           </div>
         </div>
       ) : searchQuery ? (
-        <div className="p-8 text-center text-xs font-mono text-mono-400 bg-white border border-mono-200 rounded-xl">
-          No student found with School ID "{searchQuery}".
+        <div className="p-8 text-center text-xs text-mono-400 bg-white border border-mono-200 rounded-xl">
+          No student found with ID "{searchQuery}".
         </div>
       ) : null}
     </div>
