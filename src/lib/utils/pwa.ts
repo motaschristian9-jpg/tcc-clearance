@@ -35,3 +35,4 @@ export function checkIsDesktop(width?: number): boolean {
   const w = width ?? (typeof window !== 'undefined' ? window.innerWidth : 1200);
   return w >= 1024;
 }
+

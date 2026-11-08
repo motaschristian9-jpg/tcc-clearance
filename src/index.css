@@ -3,8 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --canvas: #FAFAFA;
+    --surface: #FFFFFF;
+    --border: #E4E4E7;
+    --text-primary: #18181B;
+    --text-secondary: #71717A;
+    --text-muted: #A1A1AA;
+  }
+
   body {
+    background-color: var(--canvas);
+    color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    letter-spacing: -0.01em;
   }
 }
 
+@layer utilities {
+  .border-subtle {
+    border: 1px solid var(--border);
+  }
+}

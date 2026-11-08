@@ -130,3 +130,4 @@ export function unpackStampFromReceiptString(receiptString: string): ScannerSign
     return null;
   }
 }
+

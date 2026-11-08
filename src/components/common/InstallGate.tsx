@@ -19,23 +19,16 @@ export const InstallGate: React.FC<InstallGateProps> = ({ children }) => {
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
-    // 1. Desktop devices (e.g. Officer Dashboard) skip the install gate
     if (checkIsDesktop()) {
       setIsInstalled(true);
       return;
     }
 
-    // 2. Check if already installed
     const installed = checkIsStandalone();
     setIsInstalled(installed);
-
-    // 3. Check for in-app browser (FB/Messenger)
     setIsInApp(checkIsInAppBrowser());
-
-    // 4. Check if iOS
     setIsIosDevice(checkIsIOS());
 
-    // 5. Intercept Android beforeinstallprompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -64,124 +57,111 @@ export const InstallGate: React.FC<InstallGateProps> = ({ children }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // Fallback
       setCopied(true);
     }
   };
 
-  // If installed or on desktop, bypass gate and render children
   if (isInstalled) {
     return <>{children}</>;
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-slate-900">
-        {/* Header */}
-        <div className="bg-blue-900 p-6 text-white text-center">
-          <div className="w-16 h-16 bg-white/10 rounded-2xl mx-auto flex items-center justify-center mb-3">
-            <Smartphone className="w-8 h-8 text-amber-400" />
+    <div className="min-h-screen bg-mono-50 flex flex-col justify-center items-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl border border-mono-200 overflow-hidden text-mono-900">
+        {/* Minimalist Monochrome Header */}
+        <div className="border-b border-mono-200 p-6 text-center">
+          <div className="w-12 h-12 bg-mono-900 text-white rounded-lg mx-auto flex items-center justify-center mb-3">
+            <Smartphone className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">TCC Event Clearance</h1>
-          <p className="text-xs text-blue-200 mt-1 uppercase tracking-wider font-semibold">
-            Tagoloan Community College
-          </p>
+          <h1 className="text-lg font-bold tracking-tight text-mono-900">TCC Clearance App</h1>
+          <p className="text-xs text-mono-500 font-mono mt-0.5">Tagoloan Community College</p>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* IN-APP BROWSER DETECTED (Messenger/Facebook) */}
           {isInApp ? (
             <div className="space-y-4">
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900">
+              <div className="p-4 bg-mono-100 border border-mono-300 rounded-lg text-mono-900">
                 <div className="flex items-center gap-2 font-bold text-sm mb-1">
-                  <ExternalLink className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <ExternalLink className="w-4 h-4 text-mono-900 flex-shrink-0" />
                   In-App Browser Detected
                 </div>
-                <p className="text-sm">
-                  Facebook/Messenger cannot install this app or run camera verification. Please open this link in your standard browser.
+                <p className="text-xs text-mono-600 leading-relaxed">
+                  In-app browsers cannot install web apps or access offline biometric storage. Open in Chrome or Safari.
                 </p>
               </div>
 
-              <div className="text-sm font-semibold text-slate-700">
+              <div className="text-xs text-mono-600 font-medium">
                 1. Tap the three dots (•••) at top right.<br />
-                2. Tap <span className="text-blue-700 font-bold">"Open in Chrome / Safari"</span>.<br />
+                2. Select <strong>"Open in Browser"</strong>.<br />
                 Or copy the direct link below:
               </div>
 
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="w-full min-h-touch bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl py-3 px-4 flex items-center justify-center gap-2 transition active:scale-95 shadow"
+                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-sm rounded-lg py-3 px-4 flex items-center justify-center gap-2 transition active:scale-[0.98]"
               >
-                {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
-                {copied ? 'Link Copied to Clipboard!' : 'Copy Direct Link'}
+                {copied ? <Check className="w-4 h-4 text-mono-200" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied' : 'Copy Direct Link'}
               </button>
             </div>
           ) : isIosDevice ? (
-            /* IOS SAFARI INSTALL GUIDE */
             <div className="space-y-4">
               <div className="text-center">
-                <h2 className="text-lg font-bold text-slate-900">Install to Continue</h2>
-                <p className="text-sm text-slate-600 mt-1">
-                  The clearance app must be added to your home screen to enable offline security and digital card stamps.
+                <h2 className="text-base font-bold text-mono-900">Install to Continue</h2>
+                <p className="text-xs text-mono-500 mt-1">
+                  Offline card stamps require home screen installation.
                 </p>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-sm">
+              <div className="border border-mono-200 rounded-lg p-4 space-y-3 text-xs text-mono-700">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     1
-                  </div>
-                  <div>
-                    Tap the <strong className="text-slate-900">Share</strong> button <Share className="w-4 h-4 inline text-blue-600 mx-1" /> at the bottom of Safari.
-                  </div>
+                  </span>
+                  <span>Tap <strong>Share</strong> <Share className="w-3.5 h-3.5 inline mx-0.5" /> in Safari.</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     2
-                  </div>
-                  <div>
-                    Scroll down and tap <strong className="text-slate-900">"Add to Home Screen"</strong> <PlusSquare className="w-4 h-4 inline text-slate-700 mx-1" />.
-                  </div>
+                  </span>
+                  <span>Tap <strong>Add to Home Screen</strong> <PlusSquare className="w-3.5 h-3.5 inline mx-0.5" />.</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="w-6 h-6 rounded bg-mono-100 text-mono-900 font-mono font-bold flex items-center justify-center flex-shrink-0 border border-mono-200">
                     3
-                  </div>
-                  <div>
-                    Open <strong className="text-slate-900">TCC Clearance</strong> from your home screen.
-                  </div>
+                  </span>
+                  <span>Open <strong>TCC Clearance</strong> from your home screen.</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-blue-50 text-blue-900 rounded-xl text-xs flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-blue-700 flex-shrink-0" />
-                <span>Works 100% offline once added to your home screen.</span>
+              <div className="p-3 bg-mono-100 rounded-lg text-xs text-mono-700 flex items-center gap-2 border border-mono-200">
+                <ShieldCheck className="w-4 h-4 text-mono-900 flex-shrink-0" />
+                <span>Works offline once installed.</span>
               </div>
             </div>
           ) : (
-            /* ANDROID / CHROME INSTALL PROMPT */
             <div className="space-y-4 text-center">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Install to Continue</h2>
-                <p className="text-sm text-slate-600 mt-1">
-                  Install the official TCC Event Clearance app on your device to access offline QR scans and your clearance activity card.
+                <h2 className="text-base font-bold text-mono-900">Install to Continue</h2>
+                <p className="text-xs text-mono-500 mt-1">
+                  Install the official clearance app for offline scanning and card stamping.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleInstallClick}
-                className="w-full min-h-touch bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-2xl py-3.5 px-4 shadow-lg transition active:scale-95 flex items-center justify-center gap-2"
+                className="w-full min-h-touch bg-mono-900 hover:bg-mono-800 text-white font-medium text-sm rounded-lg py-3 px-4 transition active:scale-[0.98] flex items-center justify-center gap-2"
               >
-                <PlusSquare className="w-5 h-5 text-amber-400" />
-                Install TCC Clearance App
+                <PlusSquare className="w-4 h-4" />
+                Install Application
               </button>
 
-              <p className="text-xs text-slate-500">
-                Or tap the browser menu (⋮) and select <span className="font-semibold text-slate-700">"Install app"</span> or <span className="font-semibold text-slate-700">"Add to Home Screen"</span>.
+              <p className="text-[11px] text-mono-400 font-mono">
+                Browser Menu &rarr; Install app / Add to Home screen
               </p>
             </div>
           )}

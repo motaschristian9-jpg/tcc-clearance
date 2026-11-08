@@ -90,3 +90,4 @@ describe('Scanner-Signed Attendance Stamps and Receipt Handshake', () => {
     expect(unpacked?.signature).toBe(stamp.signature);
   });
 });
+

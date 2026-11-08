@@ -47,3 +47,4 @@ export const QRCodeSVG: React.FC<QRCodeSVGProps> = ({ value, size = 200, classNa
     />
   );
 };
+
