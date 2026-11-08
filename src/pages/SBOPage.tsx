@@ -8,7 +8,7 @@ import { generateECDSAKeyPair } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
 import { verifyOfficerPin, isOfficerAuthenticated, setOfficerAuthenticated } from '../lib/auth/officerAuth';
 import { downloadAttendanceWorkbook } from '../services/excelExportService';
-import { syncScanQueue } from '../services/syncService';
+import { syncScanQueue, exportLocalBackupJson } from '../services/syncService';
 import { StoredAttendanceRecord, StoredRosterStudent, StoredScanQueueItem } from '../types/database';
 import {
   ScanLine,
@@ -23,6 +23,7 @@ import {
   PenTool,
   FileSpreadsheet,
   UserCheck,
+  Download,
 } from 'lucide-react';
 
 export const SBOPage: React.FC = () => {
@@ -394,8 +395,8 @@ export const SBOPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Excel Attendance Download */}
-              <div className="pt-2">
+              {/* Downloads */}
+              <div className="pt-2 space-y-2">
                 <button
                   type="button"
                   onClick={handleExportExcel}
@@ -403,6 +404,15 @@ export const SBOPage: React.FC = () => {
                 >
                   <FileSpreadsheet className="size-4" />
                   <span>Download Attendance Sheet (Excel .xlsx)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => exportLocalBackupJson(departmentId)}
+                  className="w-full h-11 border border-mono-300 hover:border-mono-900 rounded-xl text-xs font-bold text-mono-900 flex items-center justify-center gap-2 transition active:scale-[0.98] bg-white"
+                >
+                  <Download className="size-4" />
+                  <span>Download Offline Backup File (JSON)</span>
                 </button>
               </div>
 
