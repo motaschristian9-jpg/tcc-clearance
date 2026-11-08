@@ -144,3 +144,4 @@ create policy "Allow insert attendance" on public.attendance_records
 
 create policy "Allow update attendance" on public.attendance_records
   for update using (true);
+

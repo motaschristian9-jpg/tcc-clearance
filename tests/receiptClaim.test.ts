@@ -75,3 +75,4 @@ describe('Receipt Claim Offline Handshake Service', () => {
     expect(records.length).toBe(0);
   });
 });
+

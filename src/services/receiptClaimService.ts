@@ -72,3 +72,4 @@ export async function claimReceiptStamp(params: ClaimReceiptParams): Promise<Cla
     eventId: stamp.event_id,
   };
 }
+

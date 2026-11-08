@@ -135,3 +135,52 @@ export async function downloadDepartmentRoster(departmentId: string): Promise<{ 
     return { success: false, count: 0, error: message };
   }
 }
+
+export interface BackupDataPayload {
+  version: string;
+  exported_at: string;
+  department_id: string;
+  total_scans: number;
+  total_roster: number;
+  total_attendance: number;
+  scan_queue: unknown[];
+  attendance: unknown[];
+}
+
+/**
+ * Generates an offline backup data payload for disaster recovery
+ */
+export async function generateBackupData(departmentId: string): Promise<BackupDataPayload> {
+  const scans = await db.scanQueue.toArray();
+  const roster = await db.getRosterByDepartment(departmentId);
+  const attendance = await db.attendance.toArray();
+
+  return {
+    version: '1.0',
+    exported_at: new Date().toISOString(),
+    department_id: departmentId,
+    total_scans: scans.length,
+    total_roster: roster.length,
+    total_attendance: attendance.length,
+    scan_queue: scans,
+    attendance,
+  };
+}
+
+/**
+ * Triggers a client-side download of the emergency offline backup JSON file.
+ */
+export async function exportLocalBackupJson(departmentId: string): Promise<void> {
+  const payload = await generateBackupData(departmentId);
+  const jsonString = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tcc-clearance-backup-${departmentId.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+

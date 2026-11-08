@@ -40,3 +40,4 @@ describe('SBO Student Approvals Workflow', () => {
     expect(updated?.status).toBe('approved');
   });
 });
+

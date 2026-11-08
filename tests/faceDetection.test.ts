@@ -42,3 +42,4 @@ describe('Real-time Face Presence and Luma Analysis', () => {
     expect(result.reason).toContain('face');
   });
 });
+

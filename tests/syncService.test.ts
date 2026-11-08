@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { db } from '../src/lib/db/dexie';
-import { syncScanQueue, downloadDepartmentRoster } from '../src/services/syncService';
+import { syncScanQueue, downloadDepartmentRoster, generateBackupData } from '../src/services/syncService';
 import { StoredScanQueueItem } from '../src/types/database';
 
 describe('Sync Engine (Dexie Local Queue to Supabase)', () => {
@@ -48,4 +48,15 @@ describe('Sync Engine (Dexie Local Queue to Supabase)', () => {
     const cached = await db.getRosterByDepartment('CIT');
     expect(cached.length).toBeGreaterThan(0);
   });
+
+  it('generates an offline emergency backup JSON data payload', async () => {
+    await downloadDepartmentRoster('CIT');
+
+    const backup = await generateBackupData('CIT');
+    expect(backup.department_id).toBe('CIT');
+    expect(backup.total_roster).toBeGreaterThan(0);
+    expect(backup.exported_at).toBeDefined();
+    expect(Array.isArray(backup.scan_queue)).toBe(true);
+  });
 });
+

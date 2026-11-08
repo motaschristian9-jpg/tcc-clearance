@@ -211,3 +211,4 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
     </div>
   );
 };
+
