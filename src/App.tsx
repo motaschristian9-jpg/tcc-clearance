@@ -6,20 +6,32 @@ import { SBOPage } from './pages/SBOPage';
 
 export default function App() {
   return (
-    <InstallGate>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Home: Students directly see their activity card & live QR */}
-          <Route path="/" element={<StudentPage />} />
-          <Route path="/student" element={<StudentPage />} />
+    <BrowserRouter>
+      <Routes>
+        {/* Public Home: Students directly see their activity card & live QR */}
+        <Route
+          path="/"
+          element={
+            <InstallGate>
+              <StudentPage />
+            </InstallGate>
+          }
+        />
+        <Route
+          path="/student"
+          element={
+            <InstallGate>
+              <StudentPage />
+            </InstallGate>
+          }
+        />
 
-          {/* Hidden/Restricted SBO Officer Portal: Protected by PIN Lock */}
-          <Route path="/sbo" element={<SBOPage />} />
+        {/* Hidden/Restricted SBO Officer Portal: Protected by PIN Lock */}
+        <Route path="/sbo" element={<SBOPage />} />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </InstallGate>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
