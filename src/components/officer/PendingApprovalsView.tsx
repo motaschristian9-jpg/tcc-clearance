@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/db/dexie';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { StoredRosterStudent } from '@/types/database';
-import { Check, X, User, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { Check, X, User, AlertCircle, Clock, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface PendingApprovalsViewProps {
   departmentId: string;
@@ -13,8 +13,10 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
   const [selectedRejectStudent, setSelectedRejectStudent] = useState<StoredRosterStudent | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('Photo is not clear or centered');
   const [notification, setNotification] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const loadPending = async () => {
+    setIsRefreshing(true);
     // 1. Sync from Supabase cloud if connected
     if (isSupabaseConfigured && supabase) {
       try {
@@ -51,10 +53,13 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
       .filter((s) => s.status === 'pending')
       .toArray();
     setPendingStudents(list);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
     loadPending();
+    const interval = setInterval(loadPending, 3500);
+    return () => clearInterval(interval);
   }, [departmentId]);
 
   const handleApprove = async (student: StoredRosterStudent) => {
@@ -116,14 +121,25 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({ depa
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto text-mono-900">
-      <div className="bg-white border border-mono-200 rounded-xl p-5 space-y-1">
-        <span className="text-xs text-mono-500 uppercase font-semibold">Department Management</span>
-        <h2 className="text-lg font-bold text-mono-900">
-          Pending Student Approvals ({departmentId})
-        </h2>
-        <p className="text-xs text-mono-500">
-          Review new student registrations and verify their face photo before approving.
-        </p>
+      <div className="bg-white border border-mono-200 rounded-xl p-5 flex items-center justify-between">
+        <div className="space-y-1">
+          <span className="text-xs text-mono-500 uppercase font-semibold">Department Management</span>
+          <h2 className="text-lg font-bold text-mono-900">
+            Pending Student Approvals ({departmentId})
+          </h2>
+          <p className="text-xs text-mono-500">
+            Review new student registrations and verify their face photo before approving.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={loadPending}
+          disabled={isRefreshing}
+          className="p-2 border border-mono-200 hover:border-mono-900 rounded-lg text-mono-700 transition"
+          title="Refresh List"
+        >
+          <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {notification && (
