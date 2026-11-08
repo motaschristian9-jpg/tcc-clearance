@@ -8,6 +8,7 @@ import { generateECDSAKeyPair } from '../lib/crypto/tokens';
 import { db } from '../lib/db/dexie';
 import { verifyOfficerPin, isOfficerAuthenticated, setOfficerAuthenticated } from '../lib/auth/officerAuth';
 import { downloadAttendanceWorkbook } from '../services/excelExportService';
+import { syncScanQueue } from '../services/syncService';
 import { StoredAttendanceRecord, StoredRosterStudent, StoredScanQueueItem } from '../types/database';
 import {
   ScanLine,
@@ -153,11 +154,12 @@ export const SBOPage: React.FC = () => {
     });
   };
 
-  const handleSimulateSync = async () => {
-    const unsynced = await db.getUnsyncedScans();
-    const uuids = unsynced.map((u) => u.client_uuid);
-    await db.markScansSynced(uuids);
-    setUnsyncedCount(0);
+  const handleSyncWithServer = async () => {
+    const res = await syncScanQueue();
+    if (res.success) {
+      const count = await db.getUnsyncedScanCount();
+      setUnsyncedCount(count);
+    }
   };
 
   // If not authenticated, show PIN protection lock screen
@@ -251,7 +253,7 @@ export const SBOPage: React.FC = () => {
             {unsyncedCount > 0 ? (
               <button
                 type="button"
-                onClick={handleSimulateSync}
+                onClick={handleSyncWithServer}
                 className="px-3 py-1 bg-mono-950 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition active:scale-[0.98]"
               >
                 <span>Send to Server ({unsyncedCount})</span>
@@ -369,7 +371,7 @@ export const SBOPage: React.FC = () => {
                 {unsyncedCount > 0 && (
                   <button
                     type="button"
-                    onClick={handleSimulateSync}
+                    onClick={handleSyncWithServer}
                     className="min-h-touch px-4 py-2 bg-mono-900 text-white rounded-lg text-xs font-bold hover:bg-mono-800 transition active:scale-[0.98]"
                   >
                     Send to Server Now
