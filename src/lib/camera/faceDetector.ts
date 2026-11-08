@@ -109,3 +109,4 @@ export async function compressImageToDimensions(
   ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
   return offscreen.toDataURL('image/jpeg', quality);
 }
+
